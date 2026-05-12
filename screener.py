@@ -26,7 +26,7 @@ from google.oauth2.service_account import Credentials
 SHEET_ID = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
 
 # NEW CACHE FILE
-MASTER_PATH = "master_data_v2.csv"
+MASTER_PATH = "master_data.csv"
 
 NIFTY100_URL = "https://drive.google.com/uc?id=1SbcUYzWZPEd2zhK1kkNndYVmkDskp9fp"
 LARGEMIDCAP_URL = "https://drive.google.com/uc?id=1BzI5KjtkkQ2H-LvUNnFXJDAki5IslJUP"
