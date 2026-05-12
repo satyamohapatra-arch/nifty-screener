@@ -1,14 +1,14 @@
 """
 screener.py
-Fetches OHLCV data, calculates indicators, pushes to Google Sheet.
-Run directly: python screener.py
+Stable version for Streamlit screener.
+Downloads OHLCV data, calculates indicators, pushes to Google Sheets.
 """
 
 import os
-import warnings
 import json
+import warnings
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings("ignore")
 
 import pandas as pd
 import numpy as np
@@ -36,27 +36,41 @@ SCOPES = [
 ]
 
 BASE_COLUMNS = [
-    'Date',
-    'Open',
-    'High',
-    'Low',
-    'Close',
-    'Volume',
-    'Stock',
-    'Universe'
+    "Date",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "Stock",
+    "Universe",
 ]
 
 COLS = [
-    'Date', 'Stock', 'Universe',
-    'Open', 'High', 'Low', 'Close', 'Volume',
-    'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
-    'EMA_10', 'EMA_13', 'EMA_20', 'EMA_50', 'EMA_200',
-    'RSI_14',
-    'MACD_line',
-    'MACD_signal',
-    'MACD_hist',
-    'Prev_Close',
-    'Returns',
+    "Date",
+    "Stock",
+    "Universe",
+    "Open",
+    "High",
+    "Low",
+    "Close",
+    "Volume",
+    "SMA_20",
+    "SMA_50",
+    "SMA_100",
+    "SMA_200",
+    "EMA_10",
+    "EMA_20",
+    "EMA_50",
+    "EMA_200",
+    "RSI_14",
+    "MFI_14",
+    "MACD_line",
+    "MACD_signal",
+    "MACD_hist",
+    "Prev_Close",
+    "Returns",
+    "Supertrend_Signal",
 ]
 
 
@@ -103,7 +117,7 @@ def last_trading_day():
     while day.weekday() >= 5:
         day -= timedelta(days=1)
 
-    return day.strftime('%Y-%m-%d')
+    return day.strftime("%Y-%m-%d")
 
 
 # ── DOWNLOAD ────────────────────────────────────────────────────────────────
@@ -122,7 +136,6 @@ def download_universe(
 
     existing = None
 
-    # ── SAFE CACHE LOADING ──────────────────────────────
     if os.path.exists(MASTER_PATH):
 
         try:
@@ -130,26 +143,24 @@ def download_universe(
             existing = pd.read_csv(MASTER_PATH)
 
             required_cols = [
-                'Date',
-                'Stock',
-                'Universe'
+                "Date",
+                "Stock",
+                "Universe"
             ]
 
             if not all(
                 col in existing.columns
                 for col in required_cols
             ):
-                raise ValueError(
-                    "Corrupted cache file"
-                )
+                raise ValueError("Corrupted cache")
 
-            existing['Date'] = pd.to_datetime(
-                existing['Date']
+            existing["Date"] = pd.to_datetime(
+                existing["Date"]
             )
 
             last_date = existing[
-                existing['Universe'] == universe_name
-            ]['Date'].max()
+                existing["Universe"] == universe_name
+            ]["Date"].max()
 
             if pd.isna(last_date):
 
@@ -159,11 +170,9 @@ def download_universe(
 
                 start_date = (
                     last_date + timedelta(days=1)
-                ).strftime('%Y-%m-%d')
+                ).strftime("%Y-%m-%d")
 
-        except Exception as e:
-
-            print(f"Resetting corrupted cache: {e}")
+        except Exception:
 
             if os.path.exists(MASTER_PATH):
                 os.remove(MASTER_PATH)
@@ -176,20 +185,16 @@ def download_universe(
 
         start_date = "2021-01-01"
 
-    print(f"{universe_name} — fetching from {start_date}")
+    print(f"{universe_name} fetching from {start_date}")
 
-    # ── ALREADY UPDATED ─────────────────────────────────
     if start_date > end_date:
 
-        print(f"{universe_name} already up to date.")
-
         return (
-            existing[existing['Universe'] == universe_name]
+            existing[existing["Universe"] == universe_name]
             if existing is not None
             else pd.DataFrame(columns=BASE_COLUMNS)
         )
 
-    # ── DOWNLOAD DATA ───────────────────────────────────
     all_data = []
 
     for stock in stocks:
@@ -223,7 +228,6 @@ def download_universe(
                 col in df.columns
                 for col in required_yf_cols
             ):
-                print(f"Skipping malformed data for {stock}")
                 continue
 
             df = df.reset_index()[
@@ -237,48 +241,34 @@ def download_universe(
 
         except Exception as e:
 
-            print(f"Error {stock}: {e}")
+            print(f"{stock}: {e}")
 
-    # ── SAFE EMPTY DATAFRAME ────────────────────────────
     new_data = (
         pd.concat(all_data, ignore_index=True)
         if all_data
         else pd.DataFrame(columns=BASE_COLUMNS)
     )
 
-    # ── SAFE SAVE ───────────────────────────────────────
     if existing is not None:
 
-        if not new_data.empty:
-
-            combined = pd.concat(
-                [existing, new_data],
-                ignore_index=True
-            )
-
-        else:
-
-            combined = existing.copy()
+        combined = pd.concat(
+            [existing, new_data],
+            ignore_index=True
+        )
 
         combined = combined.drop_duplicates(
-            subset=['Date', 'Stock', 'Universe']
+            subset=["Date", "Stock", "Universe"]
         )
 
         combined.to_csv(MASTER_PATH, index=False)
 
         return combined[
-            combined['Universe'] == universe_name
+            combined["Universe"] == universe_name
         ]
 
     else:
 
-        if not new_data.empty:
-
-            new_data = new_data.drop_duplicates(
-                subset=['Date', 'Stock', 'Universe']
-            )
-
-            new_data.to_csv(MASTER_PATH, index=False)
+        new_data.to_csv(MASTER_PATH, index=False)
 
         return new_data
 
@@ -287,21 +277,24 @@ def download_universe(
 
 def calculate_indicators(data: pd.DataFrame):
 
-    data = data.sort_values('Date').copy()
+    data = data.sort_values("Date").copy()
 
-    close = data['Close']
+    close = data["Close"]
+    high = data["High"]
+    low = data["Low"]
+    volume = data["Volume"]
 
     # SMA
     for w in [20, 50, 100, 200]:
 
-        data[f'SMA_{w}'] = (
+        data[f"SMA_{w}"] = (
             close.rolling(w).mean()
         )
 
     # EMA
-    for w in [10, 13, 20, 50, 200]:
+    for w in [10, 20, 50, 200]:
 
-        data[f'EMA_{w}'] = close.ewm(
+        data[f"EMA_{w}"] = close.ewm(
             span=w,
             adjust=False
         ).mean()
@@ -310,55 +303,77 @@ def calculate_indicators(data: pd.DataFrame):
     delta = close.diff()
 
     gain = delta.clip(lower=0)
-
     loss = -delta.clip(upper=0)
 
     avg_gain = gain.ewm(
-        alpha=1 / 14,
+        alpha=1/14,
         adjust=False
     ).mean()
 
     avg_loss = loss.ewm(
-        alpha=1 / 14,
+        alpha=1/14,
         adjust=False
     ).mean()
 
-    data['RSI_14'] = 100 - (
-        100 / (1 + avg_gain / (avg_loss + 1e-10))
+    rs = avg_gain / (avg_loss + 1e-10)
+
+    data["RSI_14"] = 100 - (100 / (1 + rs))
+
+    # MFI
+    typical = (high + low + close) / 3
+
+    money_flow = typical * volume
+
+    positive_flow = money_flow.where(
+        typical > typical.shift(1),
+        0
     )
 
+    negative_flow = money_flow.where(
+        typical < typical.shift(1),
+        0
+    )
+
+    positive_mf = positive_flow.rolling(14).sum()
+    negative_mf = negative_flow.rolling(14).sum()
+
+    mfr = positive_mf / (negative_mf + 1e-10)
+
+    data["MFI_14"] = 100 - (100 / (1 + mfr))
+
     # MACD
-    ema12 = close.ewm(
-        span=12,
-        adjust=False
-    ).mean()
+    ema12 = close.ewm(span=12, adjust=False).mean()
+    ema26 = close.ewm(span=26, adjust=False).mean()
 
-    ema26 = close.ewm(
-        span=26,
-        adjust=False
-    ).mean()
+    data["MACD_line"] = ema12 - ema26
 
-    data['MACD_line'] = ema12 - ema26
-
-    data['MACD_signal'] = data[
-        'MACD_line'
+    data["MACD_signal"] = data[
+        "MACD_line"
     ].ewm(
         span=9,
         adjust=False
     ).mean()
 
-    data['MACD_hist'] = (
-        data['MACD_line']
-        - data['MACD_signal']
+    data["MACD_hist"] = (
+        data["MACD_line"]
+        - data["MACD_signal"]
     )
 
-    data['Prev_Close'] = close.shift(1)
+    # Returns
+    data["Prev_Close"] = close.shift(1)
 
-    data['Returns'] = (
+    data["Returns"] = (
         close.pct_change() * 100
     )
 
-    return data.reset_index(drop=True)
+    # Simple trend signal
+    data["Supertrend_Signal"] = np.where(
+        close > data["EMA_20"],
+        "BUY",
+        "SELL"
+    )
+
+    return data
 
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
@@ -368,13 +383,13 @@ def run(log=print):
     end_date = last_trading_day()
 
     fetch_end = (
-        datetime.strptime(end_date, '%Y-%m-%d')
+        datetime.strptime(end_date, "%Y-%m-%d")
         + timedelta(days=1)
-    ).strftime('%Y-%m-%d')
+    ).strftime("%Y-%m-%d")
 
-    log(f"▶ Target date: {end_date}")
+    log(f"Target date: {end_date}")
 
-    log("⬇ Downloading NIFTY100...")
+    log("Downloading NIFTY100")
 
     download_universe(
         NIFTY100_URL,
@@ -383,7 +398,7 @@ def run(log=print):
         fetch_end
     )
 
-    log("⬇ Downloading LARGEMIDCAP250...")
+    log("Downloading LARGEMIDCAP250")
 
     download_universe(
         LARGEMIDCAP_URL,
@@ -392,11 +407,10 @@ def run(log=print):
         fetch_end
     )
 
-    # ── LOAD CACHE ──────────────────────────────────────
     if not os.path.exists(MASTER_PATH):
 
         raise FileNotFoundError(
-            f"{MASTER_PATH} not created."
+            f"{MASTER_PATH} missing"
         )
 
     df = pd.read_csv(MASTER_PATH)
@@ -404,14 +418,13 @@ def run(log=print):
     if df.empty:
 
         raise ValueError(
-            "No stock data downloaded. "
-            "Yahoo Finance may have failed."
+            "No data downloaded"
         )
 
     required_cols = [
-        'Date',
-        'Stock',
-        'Universe'
+        "Date",
+        "Stock",
+        "Universe"
     ]
 
     if not all(
@@ -419,20 +432,19 @@ def run(log=print):
         for col in required_cols
     ):
         raise ValueError(
-            f"Missing columns in cache: {required_cols}"
+            f"Missing columns: {required_cols}"
         )
 
-    df['Date'] = pd.to_datetime(df['Date'])
+    df["Date"] = pd.to_datetime(df["Date"])
 
-    # ── CALCULATE INDICATORS ────────────────────────────
     output_data = {}
 
-    for u in df['Universe'].unique():
+    for u in df["Universe"].unique():
 
-        log(f"📊 Processing {u}...")
+        log(f"Processing {u}")
 
         u_df = df[
-            df['Universe'] == u
+            df["Universe"] == u
         ].copy()
 
         if u_df.empty:
@@ -440,20 +452,12 @@ def run(log=print):
 
         processed = (
             u_df.groupby(
-                ['Stock', 'Universe'],
+                ["Stock", "Universe"],
+                as_index=False,
                 group_keys=False
             )
             .apply(calculate_indicators)
             .reset_index(drop=True)
-        )
-
-        # ── RESTORE IDENTITY COLUMNS ────────────────────
-        processed['Stock'] = (
-            u_df['Stock'].values[:len(processed)]
-        )
-
-        processed['Universe'] = (
-            u_df['Universe'].values[:len(processed)]
         )
 
         output_data[u] = processed
@@ -461,7 +465,7 @@ def run(log=print):
     if not output_data:
 
         raise ValueError(
-            "No valid stock data available after processing."
+            "No processed data"
         )
 
     combined = pd.concat(
@@ -469,58 +473,32 @@ def run(log=print):
         ignore_index=True
     )
 
-    combined = combined.reset_index(drop=True)
-
-    required_identity_cols = [
-        'Stock',
-        'Universe',
-        'Date'
-    ]
-
-    missing_identity = [
-        c for c in required_identity_cols
-        if c not in combined.columns
-    ]
-
-    if missing_identity:
-
-        raise ValueError(
-            f"Critical columns missing after indicators: "
-            f"{missing_identity}"
-        )
-
     available_cols = [
         c for c in COLS
         if c in combined.columns
     ]
 
-    for c in required_identity_cols:
-
-        if c not in available_cols:
-            available_cols.append(c)
-
     latest = (
         combined[available_cols]
-        .sort_values('Date')
+        .sort_values("Date")
         .groupby(
-            ['Stock', 'Universe'],
+            ["Stock", "Universe"],
+            as_index=False,
             group_keys=False
         )
-        .apply(lambda x: x.iloc[-1])
+        .tail(1)
         .reset_index(drop=True)
     )
 
-    latest['Date'] = pd.to_datetime(
-        latest['Date']
-    ).dt.strftime('%Y-%m-%d')
+    latest["Date"] = pd.to_datetime(
+        latest["Date"]
+    ).dt.strftime("%Y-%m-%d")
 
     log(
-        f"✅ Snapshot: {len(latest)} rows | "
-        f"{len(available_cols)} columns"
+        f"Snapshot: {len(latest)} rows"
     )
 
-    # ── GOOGLE SHEETS ───────────────────────────────────
-    log("☁ Pushing to Google Sheet...")
+    # ── PUSH TO GOOGLE SHEETS ──────────────────────────
 
     gc = get_gspread_client()
 
@@ -535,10 +513,13 @@ def run(log=print):
         latest
     )
 
-    log(f"✅ Done — {len(latest)} rows pushed")
+    log(
+        f"Done. {len(latest)} rows pushed."
+    )
 
     return latest
 
 
 if __name__ == "__main__":
+
     run()
