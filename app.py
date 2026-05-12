@@ -394,12 +394,21 @@ if 'presets' not in st.session_state:
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 📈 Live Screener")
-    st.caption("Multi-indicator filter · AND / OR logic")
+    st.markdown("""
+    <div class="sidebar-title">
+        <div class="sidebar-icon">📈</div>
+        <div>
+            <div class="sidebar-heading">Live Screener</div>
+            <div class="sidebar-sub">Multi-indicator filter · AND / OR logic</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.divider()
 
     # Universe toggle
-    st.markdown("**Universe**")
+    st.markdown('<div class="sidebar-label">Universe</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
     univ = st.radio("", ["NIFTY 100", "LargeMidCap 250", "Both"], index=2, label_visibility="collapsed")
     st.session_state.universe = {
         "NIFTY 100":       "NIFTY100",
@@ -423,7 +432,7 @@ with st.sidebar:
         op  = st.selectbox("Operator", [">", "<", ">=", "<="])
         val = st.number_input("Threshold", value=float(vdefault), step=0.1, format="%.2f")
 
-    if st.button("＋ Add Filter", use_container_width=True):
+    if st.button("＋ Add Filter", use_container_width=True, type="primary"):
         st.session_state.filters.append({
             "label": sel_indicator,
             "col":   col_name,
