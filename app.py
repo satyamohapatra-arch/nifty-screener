@@ -763,7 +763,8 @@ with st.sidebar:
                     st.caption(line)
                 st.cache_data.clear()
             except Exception as e:
-                st.error(f"Error: {e}")
+                import traceback
+                st.error(traceback.format_exc())
 
     st.link_button("↗ Open Source Sheet",
                    f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
