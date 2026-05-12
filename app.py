@@ -28,86 +28,86 @@ SCOPES   = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-INDICATOR_GROUPS = {
-    "Price": {
-        "Open":       ("Open",      0, 10000, 100),
-        "High":       ("High",      0, 10000, 100),
-        "Low":        ("Low",       0, 10000, 100),
-        "Close":      ("Close",     0, 10000, 100),
-        "Prev Close": ("Prev_Close",0, 10000, 100),
-        "Volume":     ("Volume",    0, 1e8,   500000),
-    },
-    "Trend / MA": {
-        "Supertrend Signal": ("Supertrend_Signal", None, None, None),  # text
-        "Supertrend":        ("Supertrend",        0, 10000, 100),
-        "Parabolic SAR":     ("Parabolic_SAR",     0, 10000, 100),
-        "SMA 20":            ("SMA_20",            0, 10000, 100),
-        "SMA 50":            ("SMA_50",            0, 10000, 100),
-        "SMA 100":           ("SMA_100",           0, 10000, 100),
-        "SMA 200":           ("SMA_200",           0, 10000, 100),
-        "EMA 10":            ("EMA_10",            0, 10000, 100),
-        "EMA 20":            ("EMA_20",            0, 10000, 100),
-        "EMA 50":            ("EMA_50",            0, 10000, 100),
-        "EMA 200":           ("EMA_200",           0, 10000, 100),
-        "HMA 20":            ("HMA_20",            0, 10000, 100),
-        "KAMA 20":           ("KAMA_20",           0, 10000, 100),
-        "FRAMA":             ("FRAMA",             0, 10000, 100),
-        "ADX 14":            ("ADX_14",            0, 100,   25),
-        "Ichimoku Tenkan":   ("Ichimoku_Tenkan",   0, 10000, 100),
-        "Ichimoku Kijun":    ("Ichimoku_Kijun",    0, 10000, 100),
-        "Donchian High":     ("Donchian_High",     0, 10000, 100),
-        "Donchian Low":      ("Donchian_Low",      0, 10000, 100),
-    },
-    "Momentum": {
-        "RSI 14":            ("RSI_14",            0, 100,   50),
-        "MACD Line":         ("MACD_line",         -100, 100, 0),
-        "MACD Signal":       ("MACD_signal",       -100, 100, 0),
-        "MACD Histogram":    ("MACD_hist",         -100, 100, 0),
-        "Stoch K":           ("Stoch_K",           0, 100,  50),
-        "Stoch D":           ("Stoch_D",           0, 100,  50),
-        "Stoch RSI":         ("Stoch_RSI",         0, 1,    0.5),
-        "CCI 20":            ("CCI_20",            -300, 300, 0),
-        "Williams R":        ("Williams_R",        -100, 0,  -50),
-        "ROC 12":            ("ROC_12",            -30, 30,   0),
-        "Ultimate Oscillator":("Ultimate_Oscillator",0,100, 50),
-        "CMO":               ("CMO",               -100, 100, 0),
-        "TRIX":              ("TRIX",              -2, 2,     0),
-        "Schaff Trend Cycle":("Schaff_Trend_Cycle",0, 100,  75),
-        "Fisher Transform":  ("Fisher_Transform",  -5, 5,    0),
-        "Coppock Curve":     ("Coppock_Curve",     -10, 10,  0),
-        "Vortex VI+":        ("Vortex_Pos",        0, 3,     1),
-        "Vortex VI-":        ("Vortex_Neg",        0, 3,     1),
-        "Elder Bull Power":  ("Elder_Bull_Power",  -50, 50,  0),
-        "Elder Bear Power":  ("Elder_Bear_Power",  -50, 50,  0),
-        "RVI":               ("RVI",               -1, 1,    0),
-        "Mass Index":        ("Mass_Index",        20, 30,  26.5),
-    },
-    "Volatility": {
-        "ATR 14":      ("ATR_14",      0, 300,   50),
-        "Volatility %":("Volatility",  0, 10,     3),
-        "BB Upper":    ("BB_Upper",    0, 10000, 100),
-        "BB Middle":   ("BB_Middle",   0, 10000, 100),
-        "BB Lower":    ("BB_Lower",    0, 10000, 100),
-        "Keltner Upper":("Keltner_Upper",0,10000,100),
-        "Keltner Lower":("Keltner_Lower",0,10000,100),
-        "Spread (H-L)":("Spread",      0, 500,   50),
-    },
-    "Volume": {
-        "MFI 14":  ("MFI_14",  0, 100,   50),
-        "OBV":     ("OBV",     -1e8, 1e8, 0),
-        "VWAP":    ("VWAP",    0, 10000, 100),
-        "Gap":     ("Gap",     -50, 50,   0),
-    },
-    "Levels": {
-        "Pivot Point": ("Pivot_Point", 0, 10000, 100),
-        "52W High":    ("52W_High",    0, 10000, 100),
-        "52W Low":     ("52W_Low",     0, 10000, 100),
-    },
-    "Returns / Derived": {
-        "Returns %":    ("Returns",     -20, 20,    0),
-        "Log Returns":  ("Log_Returns", -0.2, 0.2,  0),
-    },
+# Flat indicator lookup: label → (col, vmin, vmax, vdefault)
+# vmin=None means text filter (BUY/SELL)
+ALL_INDICATORS = {
+    "Open":               ("Open",               0,    10000, 100),
+    "High":               ("High",               0,    10000, 100),
+    "Low":                ("Low",                0,    10000, 100),
+    "Close":              ("Close",              0,    10000, 100),
+    "Prev Close":         ("Prev_Close",         0,    10000, 100),
+    "Volume":             ("Volume",             0,    1e8,   500000),
+    "Supertrend Signal":  ("Supertrend_Signal",  None, None,  None),
+    "Supertrend":         ("Supertrend",         0,    10000, 100),
+    "Parabolic SAR":      ("Parabolic_SAR",      0,    10000, 100),
+    "SMA 20":             ("SMA_20",             0,    10000, 100),
+    "SMA 50":             ("SMA_50",             0,    10000, 100),
+    "SMA 100":            ("SMA_100",            0,    10000, 100),
+    "SMA 200":            ("SMA_200",            0,    10000, 100),
+    "EMA 10":             ("EMA_10",             0,    10000, 100),
+    "EMA 20":             ("EMA_20",             0,    10000, 100),
+    "EMA 50":             ("EMA_50",             0,    10000, 100),
+    "EMA 200":            ("EMA_200",            0,    10000, 100),
+    "HMA 20":             ("HMA_20",             0,    10000, 100),
+    "KAMA 20":            ("KAMA_20",            0,    10000, 100),
+    "FRAMA":              ("FRAMA",              0,    10000, 100),
+    "ADX 14":             ("ADX_14",             0,    100,   25),
+    "Ichimoku Tenkan":    ("Ichimoku_Tenkan",    0,    10000, 100),
+    "Ichimoku Kijun":     ("Ichimoku_Kijun",     0,    10000, 100),
+    "Donchian High":      ("Donchian_High",      0,    10000, 100),
+    "Donchian Low":       ("Donchian_Low",        0,    10000, 100),
+    "RSI 14":             ("RSI_14",             0,    100,   50),
+    "MACD Line":          ("MACD_line",          -100, 100,   0),
+    "MACD Signal":        ("MACD_signal",        -100, 100,   0),
+    "MACD Histogram":     ("MACD_hist",          -100, 100,   0),
+    "Stoch K":            ("Stoch_K",            0,    100,   50),
+    "Stoch D":            ("Stoch_D",            0,    100,   50),
+    "Stoch RSI":          ("Stoch_RSI",          0,    1,     0.5),
+    "CCI 20":             ("CCI_20",             -300, 300,   0),
+    "Williams R":         ("Williams_R",         -100, 0,     -50),
+    "ROC 12":             ("ROC_12",             -30,  30,    0),
+    "Ultimate Oscillator":("Ultimate_Oscillator",0,    100,   50),
+    "CMO":                ("CMO",                -100, 100,   0),
+    "TRIX":               ("TRIX",               -2,   2,     0),
+    "Schaff Trend Cycle": ("Schaff_Trend_Cycle", 0,    100,   75),
+    "Fisher Transform":   ("Fisher_Transform",   -5,   5,     0),
+    "Coppock Curve":      ("Coppock_Curve",      -10,  10,    0),
+    "Vortex VI+":         ("Vortex_Pos",         0,    3,     1),
+    "Vortex VI-":         ("Vortex_Neg",         0,    3,     1),
+    "Elder Bull Power":   ("Elder_Bull_Power",   -50,  50,    0),
+    "Elder Bear Power":   ("Elder_Bear_Power",   -50,  50,    0),
+    "RVI":                ("RVI",                -1,   1,     0),
+    "Mass Index":         ("Mass_Index",         20,   30,    26.5),
+    "ATR 14":             ("ATR_14",             0,    300,   50),
+    "Volatility %":       ("Volatility",         0,    10,    3),
+    "BB Upper":           ("BB_Upper",           0,    10000, 100),
+    "BB Middle":          ("BB_Middle",          0,    10000, 100),
+    "BB Lower":           ("BB_Lower",           0,    10000, 100),
+    "Keltner Upper":      ("Keltner_Upper",      0,    10000, 100),
+    "Keltner Lower":      ("Keltner_Lower",      0,    10000, 100),
+    "Spread (H-L)":       ("Spread",             0,    500,   50),
+    "MFI 14":             ("MFI_14",             0,    100,   50),
+    "OBV":                ("OBV",                -1e8, 1e8,   0),
+    "VWAP":               ("VWAP",               0,    10000, 100),
+    "Gap":                ("Gap",                -50,  50,    0),
+    "Pivot Point":        ("Pivot_Point",        0,    10000, 100),
+    "52W High":           ("52W_High",           0,    10000, 100),
+    "52W Low":            ("52W_Low",            0,    10000, 100),
+    "Returns %":          ("Returns",            -20,  20,    0),
+    "Log Returns":        ("Log_Returns",        -0.2, 0.2,   0),
 }
+
+PRESETS_FILE = "presets.json"
+
+def load_presets():
+    if os.path.exists(PRESETS_FILE):
+        with open(PRESETS_FILE) as f:
+            return json.load(f)
+    return {}
+
+def save_presets(presets):
+    with open(PRESETS_FILE, "w") as f:
+        json.dump(presets, f)
 
 # ── STYLES ────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -212,6 +212,8 @@ if 'logic' not in st.session_state:
     st.session_state.logic = "AND"
 if 'universe' not in st.session_state:
     st.session_state.universe = "ALL"
+if 'presets' not in st.session_state:
+    st.session_state.presets = load_presets()
 
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -231,15 +233,11 @@ with st.sidebar:
 
     st.divider()
 
-    # Add filter
+    # ── ADD FILTER (flat single dropdown) ─────────────────────────────────────
     st.markdown("**Add Filter**")
-    group_names   = list(INDICATOR_GROUPS.keys())
-    sel_group     = st.selectbox("Group", group_names, label_visibility="collapsed")
-    ind_names     = list(INDICATOR_GROUPS[sel_group].keys())
-    sel_indicator = st.selectbox("Indicator", ind_names, label_visibility="collapsed")
-
-    col_info = INDICATOR_GROUPS[sel_group][sel_indicator]
-    col_name, vmin, vmax, vdefault = col_info
+    sel_indicator = st.selectbox("Indicator", list(ALL_INDICATORS.keys()),
+                                 label_visibility="collapsed")
+    col_name, vmin, vmax, vdefault = ALL_INDICATORS[sel_indicator]
 
     is_text = vmin is None
     if is_text:
@@ -260,41 +258,41 @@ with st.sidebar:
 
     st.divider()
 
-    # Preset strategies
-    st.markdown("**Preset Strategies**")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🚀 Breakout", use_container_width=True):
-            st.session_state.filters = [
-                {"label":"RSI 14",  "col":"RSI_14",  "op":">", "val":60},
-                {"label":"ADX 14",  "col":"ADX_14",  "op":">", "val":25},
-                {"label":"Supertrend Signal","col":"Supertrend_Signal","op":"==","val":"BUY"},
-            ]
-            st.rerun()
-    with col2:
-        if st.button("📈 Momentum", use_container_width=True):
-            st.session_state.filters = [
-                {"label":"RSI 14",       "col":"RSI_14",      "op":">","val":55},
-                {"label":"MACD Histogram","col":"MACD_hist",   "op":">","val":0},
-                {"label":"ROC 12",        "col":"ROC_12",      "op":">","val":2},
-            ]
-            st.rerun()
-    col3, col4 = st.columns(2)
-    with col3:
-        if st.button("💰 Oversold", use_container_width=True):
-            st.session_state.filters = [
-                {"label":"RSI 14",    "col":"RSI_14",    "op":"<","val":35},
-                {"label":"Stoch K",   "col":"Stoch_K",   "op":"<","val":30},
-                {"label":"Williams R","col":"Williams_R", "op":"<","val":-80},
-            ]
-            st.rerun()
-    with col4:
-        if st.button("📊 Volume", use_container_width=True):
-            st.session_state.filters = [
-                {"label":"MFI 14",   "col":"MFI_14",  "op":">","val":60},
-                {"label":"Returns %","col":"Returns", "op":">","val":1},
-            ]
-            st.rerun()
+    # ── CUSTOM PRESETS ────────────────────────────────────────────────────────
+    st.markdown("**My Presets**")
+
+    # Save current filters as preset
+    if st.session_state.filters:
+        preset_name = st.text_input("Save current filters as:", placeholder="e.g. Breakout Setup",
+                                    label_visibility="collapsed")
+        if st.button("💾 Save Preset", use_container_width=True):
+            if preset_name.strip():
+                st.session_state.presets[preset_name.strip()] = {
+                    "filters": st.session_state.filters.copy(),
+                    "logic":   st.session_state.logic,
+                }
+                save_presets(st.session_state.presets)
+                st.success(f"Saved "{preset_name.strip()}"")
+                st.rerun()
+            else:
+                st.warning("Enter a name first.")
+
+    # Load / delete saved presets
+    if st.session_state.presets:
+        for pname, pdata in list(st.session_state.presets.items()):
+            pc1, pc2 = st.columns([3, 1])
+            with pc1:
+                if st.button(f"▶ {pname}", use_container_width=True, key=f"load_{pname}"):
+                    st.session_state.filters = pdata["filters"].copy()
+                    st.session_state.logic   = pdata.get("logic", "AND")
+                    st.rerun()
+            with pc2:
+                if st.button("✕", key=f"del_{pname}"):
+                    del st.session_state.presets[pname]
+                    save_presets(st.session_state.presets)
+                    st.rerun()
+    else:
+        st.caption("No presets yet. Add filters and save.")
 
     st.divider()
 
