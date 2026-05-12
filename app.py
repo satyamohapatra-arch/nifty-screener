@@ -149,6 +149,48 @@ body {
     background: var(--bg);
 }
 
+/* BUY badge */
+.badge-buy {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+
+    padding: 4px 10px !important;
+
+    border-radius: 999px !important;
+    border: 1px solid rgba(0,138,88,0.18) !important;
+
+    background: rgba(0,138,88,0.10) !important;
+    color: #008a58 !important;
+
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+
+    text-transform: uppercase;
+}
+
+/* SELL badge */
+.badge-sell {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+
+    padding: 4px 10px !important;
+
+    border-radius: 999px !important;
+    border: 1px solid rgba(194,65,65,0.18) !important;
+
+    background: rgba(194,65,65,0.10) !important;
+    color: #c24141 !important;
+
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+
+    text-transform: uppercase;
+}
+
 /* Main app */
 .stApp {
     background: var(--bg);
