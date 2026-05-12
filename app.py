@@ -152,32 +152,6 @@ body,
     font-family: var(--font-mono);
 }
 
-/* Remove radio widget top empty container */
-.stRadio > label {
-    display: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    height: 0 !important;
-}
-
-/* Remove hidden radio spacer block */
-div[data-testid="stRadio"] > div:first-child {
-    display: none !important;
-}
-
-/* Tighten radio layout */
-div[data-testid="stRadio"] {
-    margin-top: -8px !important;
-}
-
-/* Remove empty radio label spacing */
-.stRadio > label {
-    display: none !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
 /* Main layout */
 .block-container {
     max-width: 100%;
@@ -315,9 +289,17 @@ hr {
     border-color: rgba(90,138,0,0.25) !important;
 }
 
-/* Radio groups */
-.stRadio > div {
-    gap: 0.7rem;
+/* Radio styling */
+div[data-testid="stRadio"] {
+    margin-top: -6px !important;
+}
+
+div[data-testid="stRadio"] label[data-baseweb="radio"] {
+    padding: 2px 0 !important;
+}
+
+div[data-testid="stRadio"] > div {
+    gap: 0.6rem;
 }
 
 /* Buttons */
