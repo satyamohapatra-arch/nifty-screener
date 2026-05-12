@@ -207,7 +207,7 @@ body,
 
 /* Main app */
 .stApp {
-    background: var(--bg);
+    background: #f4f3ee !important;
 }
 
 .block-container {
@@ -236,8 +236,8 @@ p, label, span, div {
 
 /* Sidebar */
 section[data-testid="stSidebar"] {
-    background: var(--bg2);
-    border-right: 1px solid var(--border);
+    background: #ffffff !important;
+    border-right: 1px solid rgba(0,0,0,0.08) !important;
 """, unsafe_allow_html=True)
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
