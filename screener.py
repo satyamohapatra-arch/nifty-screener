@@ -25,7 +25,6 @@ from google.oauth2.service_account import Credentials
 
 SHEET_ID = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
 
-# NEW CACHE FILE
 MASTER_PATH = "master_data.csv"
 
 NIFTY100_URL = "https://drive.google.com/uc?id=1SbcUYzWZPEd2zhK1kkNndYVmkDskp9fp"
@@ -34,6 +33,17 @@ LARGEMIDCAP_URL = "https://drive.google.com/uc?id=1BzI5KjtkkQ2H-LvUNnFXJDAki5Isl
 SCOPES = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
+]
+
+BASE_COLUMNS = [
+    'Date',
+    'Open',
+    'High',
+    'Low',
+    'Close',
+    'Volume',
+    'Stock',
+    'Universe'
 ]
 
 COLS = [
@@ -112,7 +122,7 @@ def download_universe(
 
     existing = None
 
-    # ── SAFE CACHE HANDLING ─────────────────────────────
+    # ── LOAD CACHE SAFELY ───────────────────────────────
     if os.path.exists(MASTER_PATH):
 
         try:
@@ -176,7 +186,7 @@ def download_universe(
         return (
             existing[existing['Universe'] == universe_name]
             if existing is not None
-            else pd.DataFrame()
+            else pd.DataFrame(columns=BASE_COLUMNS)
         )
 
     # ── DOWNLOAD DATA ───────────────────────────────────
@@ -201,6 +211,21 @@ def download_universe(
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
 
+            required_yf_cols = [
+                "Open",
+                "High",
+                "Low",
+                "Close",
+                "Volume"
+            ]
+
+            if not all(
+                col in df.columns
+                for col in required_yf_cols
+            ):
+                print(f"Skipping malformed data for {stock}")
+                continue
+
             df = df.reset_index()[
                 ["Date", "Open", "High", "Low", "Close", "Volume"]
             ]
@@ -214,11 +239,15 @@ def download_universe(
 
             print(f"Error {stock}: {e}")
 
+    # ── SAFE EMPTY DATAFRAME ────────────────────────────
     new_data = (
         pd.concat(all_data, ignore_index=True)
         if all_data
-        else pd.DataFrame()
+        else pd.DataFrame(columns=BASE_COLUMNS)
     )
+
+    print("NEW DATA COLUMNS:", new_data.columns.tolist())
+    print("NEW DATA SHAPE:", new_data.shape)
 
     # ── SAFE SAVE ───────────────────────────────────────
     if existing is not None:
@@ -375,6 +404,13 @@ def run(log=print):
 
     df = pd.read_csv(MASTER_PATH)
 
+    if df.empty:
+
+        raise ValueError(
+            "No stock data downloaded. "
+            "Yahoo Finance may have failed."
+        )
+
     required_cols = [
         'Date',
         'Stock',
@@ -391,6 +427,9 @@ def run(log=print):
 
     df['Date'] = pd.to_datetime(df['Date'])
 
+    print("MASTER DF COLUMNS:", df.columns.tolist())
+    print("MASTER DF SHAPE:", df.shape)
+
     # ── CALCULATE INDICATORS ────────────────────────────
     output_data = {}
 
@@ -402,12 +441,24 @@ def run(log=print):
             df['Universe'] == u
         ].copy()
 
+        if u_df.empty:
+            continue
+
+        if 'Stock' not in u_df.columns:
+            continue
+
         output_data[u] = (
             u_df.groupby(
                 ['Stock', 'Universe'],
                 group_keys=False
             )
             .apply(calculate_indicators)
+        )
+
+    if not output_data:
+
+        raise ValueError(
+            "No valid stock data available after processing."
         )
 
     combined = pd.concat(
