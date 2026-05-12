@@ -432,9 +432,63 @@ def run(log=print):
     download_universe(LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250", end_date, fetch_end)
 
     log("📊 Calculating indicators...")
-    df = pd.read_csv(MASTER_PATH)
-    df = df.dropna(subset=['Stock', 'Universe'])
-    df['Date'] = pd.to_datetime(df['Date'])
+
+# ── SAFE CACHE LOADING ──────────────────────────────────────
+if os.path.exists(MASTER_PATH):
+
+    try:
+        df = pd.read_csv(MASTER_PATH)
+
+        required_cols = ['Stock', 'Universe', 'Date']
+
+        # Detect corrupted cache
+        if not all(col in df.columns for col in required_cols):
+            raise ValueError(
+                f"Corrupted cache. Missing columns: "
+                f"{[c for c in required_cols if c not in df.columns]}"
+            )
+
+        df = df.dropna(subset=['Stock', 'Universe'])
+
+        if df.empty:
+            raise ValueError("Cache became empty after cleanup.")
+
+        df['Date'] = pd.to_datetime(df['Date'])
+
+    except Exception as e:
+
+        log(f"⚠ Corrupted cache detected: {e}")
+        log("♻ Removing corrupted master_data.csv and rebuilding...")
+
+        os.remove(MASTER_PATH)
+
+        # Rebuild data from scratch
+        log("⬇ Re-downloading NIFTY100...")
+        download_universe(
+            NIFTY100_URL,
+            "NIFTY100",
+            end_date,
+            fetch_end
+        )
+
+        log("⬇ Re-downloading LARGEMIDCAP250...")
+        download_universe(
+            LARGEMIDCAP_URL,
+            "NIFTY_LARGEMIDCAP250",
+            end_date,
+            fetch_end
+        )
+
+        df = pd.read_csv(MASTER_PATH)
+
+        df = df.dropna(subset=['Stock', 'Universe'])
+
+        df['Date'] = pd.to_datetime(df['Date'])
+
+else:
+    raise FileNotFoundError(
+        "master_data.csv was not created correctly."
+    )
 
     output_data = {}
     for u in df['Universe'].unique():
