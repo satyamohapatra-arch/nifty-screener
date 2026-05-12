@@ -1,6 +1,0 @@
-master_data.csv
-service_account.json
-*.csv
-__pycache__/
-*.pyc
-.env
