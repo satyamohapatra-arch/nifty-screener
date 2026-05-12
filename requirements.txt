@@ -1,0 +1,10 @@
+streamlit>=1.35.0
+pandas>=2.0.0
+numpy>=1.26.0
+yfinance>=0.2.40
+gspread>=6.0.0
+gspread-dataframe>=4.0.0
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
+google-auth-httplib2>=0.2.0
+zoneinfo; python_version < "3.9"
