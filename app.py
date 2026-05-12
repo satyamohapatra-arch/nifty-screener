@@ -152,6 +152,24 @@ body,
     font-family: var(--font-mono);
 }
 
+/* Remove radio widget top empty container */
+.stRadio > label {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+}
+
+/* Remove hidden radio spacer block */
+div[data-testid="stRadio"] > div:first-child {
+    display: none !important;
+}
+
+/* Tighten radio layout */
+div[data-testid="stRadio"] {
+    margin-top: -8px !important;
+}
+
 /* Remove empty radio label spacing */
 .stRadio > label {
     display: none !important;
