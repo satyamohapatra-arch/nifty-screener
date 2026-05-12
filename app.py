@@ -110,70 +110,78 @@ def save_presets(presets):
         json.dump(presets, f)
 
 # ── STYLES ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #f4f3ee;
+  --bg2: #ffffff;
+  --bg3: #eeede8;
+  --bg4: #e4e3de;
+
+  --border: rgba(0,0,0,0.08);
+  --border2: rgba(0,0,0,0.14);
+
+  --text: #1a1a14;
+  --text2: #5a5950;
+  --text3: #9a9990;
+
+  --accent: #5a8a00;
+  --accent2: #008a58;
+  --red: #c24141;
+
+  --radius: 8px;
+  --radius-lg: 14px;
+
+  --font-head: 'Syne', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
 }
 
-/* SELL badge */
-.badge-sell {
-    display: inline-block;
-    padding: 4px 10px;
-
-    border-radius: 999px;
-    border: 1px solid rgba(194,65,65,0.15);
-
-    background: rgba(194,65,65,0.08);
-    color: var(--red);
-
-    font-size: 10px;
-    font-weight: 700;
+html, body, [class*="css"] {
+    font-family: var(--font-mono);
+    background: var(--bg);
+    color: var(--text);
 }
 
-/* Returns */
-.up {
-    color: var(--accent2);
-    font-weight: 600;
+body {
+    background: var(--bg);
 }
 
-.dn {
-    color: var(--red);
-    font-weight: 600;
+/* Main app */
+.stApp {
+    background: var(--bg);
 }
 
-.neu {
-    color: var(--text2);
+.block-container {
+    max-width: 100%;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
 }
 
-/* Caption */
-[data-testid="stCaptionContainer"] {
-    color: var(--text3);
+/* Typography */
+h1, h2, h3 {
+    font-family: var(--font-head) !important;
+    color: var(--text);
+    letter-spacing: -0.03em;
 }
 
-/* Expanders */
-.streamlit-expanderHeader {
+h1 {
+    font-size: 2rem !important;
+    font-weight: 700 !important;
+}
+
+p, label, span, div {
+    color: var(--text);
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
     background: var(--bg2);
-    border-radius: var(--radius);
-}
-
-/* Remove excess spacing */
-.element-container {
-    margin-bottom: 0.6rem;
-}
-
-/* Scrollbars */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--bg4);
-    border-radius: 10px;
-}
-
-</style>
+    border-right: 1px solid var(--border);
 """, unsafe_allow_html=True)
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
