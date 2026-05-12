@@ -126,9 +126,27 @@ def download_universe(
 
     if os.path.exists(MASTER_PATH):
 
+    try:
+
         existing = pd.read_csv(MASTER_PATH)
 
-        existing['Date'] = pd.to_datetime(existing['Date'])
+        required_cols = [
+            'Date',
+            'Stock',
+            'Universe'
+        ]
+
+        if not all(
+            col in existing.columns
+            for col in required_cols
+        ):
+            raise ValueError(
+                "Corrupted master_data.csv"
+            )
+
+        existing['Date'] = pd.to_datetime(
+            existing['Date']
+        )
 
         last_date = existing[
             existing['Universe'] == universe_name
@@ -142,8 +160,19 @@ def download_universe(
                 last_date + timedelta(days=1)
             ).strftime('%Y-%m-%d')
 
-    else:
+    except Exception as e:
+
+        print(f"Resetting corrupted cache: {e}")
+
+        if os.path.exists(MASTER_PATH):
+            os.remove(MASTER_PATH)
+
+        existing = None
+
         start_date = "2021-01-01"
+
+else:
+    start_date = "2021-01-01"
 
     print(f"{universe_name} — fetching from {start_date}")
 
