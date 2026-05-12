@@ -141,7 +141,10 @@ st.markdown("""
     color-scheme: light !important;
 }
 
-/* Global */
+/* ─────────────────────────────────────────────────────────────
+   GLOBAL
+───────────────────────────────────────────────────────────── */
+
 html,
 body,
 .stApp,
@@ -152,7 +155,6 @@ body,
     font-family: var(--font-mono);
 }
 
-/* Main layout */
 .block-container {
     max-width: 100%;
     padding-top: 2rem;
@@ -267,10 +269,13 @@ hr {
     margin-bottom: 24px !important;
 }
 
-/* Inputs */
-.stSelectbox > div > div,
-.stNumberInput > div > div > input,
-.stTextInput > div > div > input {
+/* ─────────────────────────────────────────────────────────────
+   INPUTS
+───────────────────────────────────────────────────────────── */
+
+.stSelectbox div[data-baseweb="select"] > div,
+.stNumberInput input,
+.stTextInput input {
     background: #fcfcfa !important;
 
     border: 1px solid rgba(0,0,0,0.08) !important;
@@ -278,15 +283,24 @@ hr {
 
     min-height: 48px !important;
 
+    display: flex !important;
+    align-items: center !important;
+
     font-size: 14px !important;
 
     transition: all 0.15s ease;
 }
 
-.stSelectbox > div > div:hover,
-.stNumberInput > div > div > input:hover,
-.stTextInput > div > div > input:hover {
+.stSelectbox div[data-baseweb="select"] > div:hover,
+.stNumberInput input:hover,
+.stTextInput input:hover {
     border-color: rgba(90,138,0,0.25) !important;
+}
+
+/* Fix select alignment */
+.stSelectbox span {
+    display: flex !important;
+    align-items: center !important;
 }
 
 /* Radio styling */
@@ -302,7 +316,10 @@ div[data-testid="stRadio"] > div {
     gap: 0.6rem;
 }
 
-/* Buttons */
+/* ─────────────────────────────────────────────────────────────
+   BUTTONS
+───────────────────────────────────────────────────────────── */
+
 .stButton button,
 .stDownloadButton button,
 .stLinkButton a {
@@ -350,7 +367,10 @@ div[data-testid="stRadio"] > div {
     background: #f7fbef !important;
 }
 
-/* Metrics */
+/* ─────────────────────────────────────────────────────────────
+   METRICS
+───────────────────────────────────────────────────────────── */
+
 [data-testid="metric-container"] {
     background: var(--bg2);
 
@@ -381,7 +401,10 @@ div[data-testid="stRadio"] > div {
     font-weight: 700 !important;
 }
 
-/* Table wrapper */
+/* ─────────────────────────────────────────────────────────────
+   TABLE
+───────────────────────────────────────────────────────────── */
+
 .tbl-wrap {
     overflow-x: auto;
     overflow-y: auto;
@@ -394,7 +417,6 @@ div[data-testid="stRadio"] > div {
     border-radius: var(--radius-lg);
 }
 
-/* Table */
 .screener-table {
     width: 100%;
 
@@ -449,7 +471,10 @@ div[data-testid="stRadio"] > div {
     background: var(--bg3);
 }
 
-/* BUY badge */
+/* ─────────────────────────────────────────────────────────────
+   BADGES
+───────────────────────────────────────────────────────────── */
+
 .badge-buy {
     display: inline-flex !important;
     align-items: center;
@@ -473,7 +498,6 @@ div[data-testid="stRadio"] > div {
     text-transform: uppercase;
 }
 
-/* SELL badge */
 .badge-sell {
     display: inline-flex !important;
     align-items: center;
