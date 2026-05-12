@@ -122,7 +122,7 @@ def download_universe(
 
     existing = None
 
-    # ── LOAD CACHE SAFELY ───────────────────────────────
+    # ── SAFE CACHE LOADING ──────────────────────────────
     if os.path.exists(MASTER_PATH):
 
         try:
@@ -361,7 +361,7 @@ def calculate_indicators(data: pd.DataFrame):
         close.pct_change() * 100
     )
 
-    return data
+    return data.reset_index(drop=True)
 
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────
@@ -447,13 +447,16 @@ def run(log=print):
         if 'Stock' not in u_df.columns:
             continue
 
-        output_data[u] = (
+        processed = (
             u_df.groupby(
                 ['Stock', 'Universe'],
                 group_keys=False
             )
             .apply(calculate_indicators)
+            .reset_index(drop=True)
         )
+
+        output_data[u] = processed
 
     if not output_data:
 
@@ -466,10 +469,36 @@ def run(log=print):
         ignore_index=True
     )
 
+    combined = combined.reset_index(drop=True)
+
+    required_identity_cols = [
+        'Stock',
+        'Universe',
+        'Date'
+    ]
+
+    missing_identity = [
+        c for c in required_identity_cols
+        if c not in combined.columns
+    ]
+
+    if missing_identity:
+
+        raise ValueError(
+            f"Critical columns missing after indicators: "
+            f"{missing_identity}"
+        )
+
     available_cols = [
         c for c in COLS
         if c in combined.columns
     ]
+
+    # Ensure identity columns always exist
+    for c in required_identity_cols:
+
+        if c not in available_cols:
+            available_cols.append(c)
 
     latest = (
         combined[available_cols]
