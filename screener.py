@@ -1,14 +1,11 @@
-"""
-screener.py
-Stable version for Streamlit screener.
-Downloads OHLCV data, calculates indicators, pushes to Google Sheets.
-"""
+# screener.py
 
+# ── SETUP ─────────────────────────────────────────────────────────────────────
 import os
 import json
 import warnings
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 
 import pandas as pd
 import numpy as np
@@ -21,7 +18,7 @@ from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
 
 
-# ── CONSTANTS ────────────────────────────────────────────────────────────────
+# ── CONFIG ────────────────────────────────────────────────────────────────────
 
 SHEET_ID = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
 
@@ -35,50 +32,37 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-BASE_COLUMNS = [
-    "Date",
-    "Open",
-    "High",
-    "Low",
-    "Close",
-    "Volume",
-    "Stock",
-    "Universe",
-]
+
+# ── COLUMNS ───────────────────────────────────────────────────────────────────
 
 COLS = [
-    "Date",
-    "Stock",
-    "Universe",
-    "Open",
-    "High",
-    "Low",
-    "Close",
-    "Volume",
-    "SMA_20",
-    "SMA_50",
-    "SMA_100",
-    "SMA_200",
-    "EMA_10",
-    "EMA_20",
-    "EMA_50",
-    "EMA_200",
-    "RSI_14",
-    "MFI_14",
-    "MACD_line",
-    "MACD_signal",
-    "MACD_hist",
-    "Prev_Close",
-    "Returns",
-    "Supertrend_Signal",
+    'Date', 'Stock', 'Universe',
+    'Open', 'High', 'Low', 'Close', 'Volume',
+
+    'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
+    'EMA_10', 'EMA_13', 'EMA_20', 'EMA_50', 'EMA_200',
+
+    'RSI_14',
+    'MACD_line', 'MACD_signal', 'MACD_hist',
+
+    'CCI_20',
+    'MFI_14',
+
+    'Prev_Close',
+    'Returns',
+
+    'Supertrend',
+    'Supertrend_Signal',
 ]
 
 
-# ── AUTH ─────────────────────────────────────────────────────────────────────
+# ── GOOGLE AUTH ───────────────────────────────────────────────────────────────
 
 def get_gspread_client():
 
-    creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+    creds_json = os.environ.get(
+        "GOOGLE_SERVICE_ACCOUNT_JSON"
+    )
 
     if creds_json:
 
@@ -97,7 +81,7 @@ def get_gspread_client():
     return gspread.authorize(creds)
 
 
-# ── DATE HELPERS ─────────────────────────────────────────────────────────────
+# ── DATE ──────────────────────────────────────────────────────────────────────
 
 def last_trading_day():
 
@@ -117,82 +101,61 @@ def last_trading_day():
     while day.weekday() >= 5:
         day -= timedelta(days=1)
 
-    return day.strftime("%Y-%m-%d")
+    return day.strftime('%Y-%m-%d')
 
 
-# ── DOWNLOAD ────────────────────────────────────────────────────────────────
+# ── DOWNLOAD ──────────────────────────────────────────────────────────────────
 
-def download_universe(
-    symbols_url: str,
-    universe_name: str,
-    end_date: str,
-    fetch_end: str
-):
+def download_universe(symbols_url, universe_name):
 
     stocks = [
         s + ".NS"
         for s in pd.read_csv(symbols_url)["Symbol"].tolist()
     ]
 
-    existing = None
+    END_DATE = last_trading_day()
+
+    FETCH_END = (
+        datetime.strptime(END_DATE, '%Y-%m-%d')
+        + timedelta(days=1)
+    ).strftime('%Y-%m-%d')
 
     if os.path.exists(MASTER_PATH):
 
-        try:
+        existing = pd.read_csv(MASTER_PATH)
 
-            existing = pd.read_csv(MASTER_PATH)
+        existing['Date'] = pd.to_datetime(
+            existing['Date']
+        )
 
-            required_cols = [
-                "Date",
-                "Stock",
-                "Universe"
-            ]
+        last_date = existing[
+            existing['Universe'] == universe_name
+        ]['Date'].max()
 
-            if not all(
-                col in existing.columns
-                for col in required_cols
-            ):
-                raise ValueError("Corrupted cache")
-
-            existing["Date"] = pd.to_datetime(
-                existing["Date"]
-            )
-
-            last_date = existing[
-                existing["Universe"] == universe_name
-            ]["Date"].max()
-
-            if pd.isna(last_date):
-
-                start_date = "2021-01-01"
-
-            else:
-
-                start_date = (
-                    last_date + timedelta(days=1)
-                ).strftime("%Y-%m-%d")
-
-        except Exception:
-
-            if os.path.exists(MASTER_PATH):
-                os.remove(MASTER_PATH)
-
-            existing = None
+        if pd.isna(last_date):
 
             start_date = "2021-01-01"
+
+        else:
+
+            start_date = (
+                last_date + timedelta(days=1)
+            ).strftime('%Y-%m-%d')
 
     else:
 
         start_date = "2021-01-01"
 
-    print(f"{universe_name} fetching from {start_date}")
+        existing = None
 
-    if start_date > end_date:
+    if start_date > END_DATE:
 
         return (
-            existing[existing["Universe"] == universe_name]
+            existing[
+                existing['Universe'] == universe_name
+            ]
             if existing is not None
-            else pd.DataFrame(columns=BASE_COLUMNS)
+            else pd.DataFrame()
         )
 
     all_data = []
@@ -204,7 +167,7 @@ def download_universe(
             df = yf.download(
                 stock,
                 start=start_date,
-                end=fetch_end,
+                end=FETCH_END,
                 interval="1d",
                 auto_adjust=False,
                 progress=False
@@ -214,24 +177,18 @@ def download_universe(
                 continue
 
             if isinstance(df.columns, pd.MultiIndex):
+
                 df.columns = df.columns.get_level_values(0)
 
-            required_yf_cols = [
-                "Open",
-                "High",
-                "Low",
-                "Close",
-                "Volume"
-            ]
-
-            if not all(
-                col in df.columns
-                for col in required_yf_cols
-            ):
-                continue
-
             df = df.reset_index()[
-                ["Date", "Open", "High", "Low", "Close", "Volume"]
+                [
+                    "Date",
+                    "Open",
+                    "High",
+                    "Low",
+                    "Close",
+                    "Volume"
+                ]
             ]
 
             df["Stock"] = stock
@@ -241,15 +198,15 @@ def download_universe(
 
         except Exception as e:
 
-            print(f"{stock}: {e}")
+            print(f"Error {stock}: {e}")
 
     new_data = (
         pd.concat(all_data, ignore_index=True)
         if all_data
-        else pd.DataFrame(columns=BASE_COLUMNS)
+        else pd.DataFrame()
     )
 
-    if existing is not None:
+    if existing is not None and not new_data.empty:
 
         combined = pd.concat(
             [existing, new_data],
@@ -257,44 +214,50 @@ def download_universe(
         )
 
         combined = combined.drop_duplicates(
-            subset=["Date", "Stock", "Universe"]
+            subset=['Date', 'Stock', 'Universe']
         )
 
-        combined.to_csv(MASTER_PATH, index=False)
+        combined.to_csv(
+            MASTER_PATH,
+            index=False
+        )
 
         return combined[
-            combined["Universe"] == universe_name
+            combined['Universe'] == universe_name
         ]
 
-    else:
+    if not new_data.empty:
 
-        new_data.to_csv(MASTER_PATH, index=False)
+        new_data.to_csv(
+            MASTER_PATH,
+            index=False
+        )
 
-        return new_data
+    return new_data
 
 
-# ── INDICATORS ───────────────────────────────────────────────────────────────
+# ── INDICATORS ────────────────────────────────────────────────────────────────
 
-def calculate_indicators(data: pd.DataFrame):
+def calculate_indicators(data):
 
-    data = data.sort_values("Date").copy()
+    data = data.sort_values('Date').copy()
 
-    close = data["Close"]
-    high = data["High"]
-    low = data["Low"]
-    volume = data["Volume"]
+    close = data['Close']
+    high = data['High']
+    low = data['Low']
+    vol = data['Volume']
 
     # SMA
     for w in [20, 50, 100, 200]:
 
-        data[f"SMA_{w}"] = (
+        data[f'SMA_{w}'] = (
             close.rolling(w).mean()
         )
 
     # EMA
-    for w in [10, 20, 50, 200]:
+    for w in [10, 13, 20, 50, 200]:
 
-        data[f"EMA_{w}"] = close.ewm(
+        data[f'EMA_{w}'] = close.ewm(
             span=w,
             adjust=False
         ).mean()
@@ -303,6 +266,7 @@ def calculate_indicators(data: pd.DataFrame):
     delta = close.diff()
 
     gain = delta.clip(lower=0)
+
     loss = -delta.clip(upper=0)
 
     avg_gain = gain.ewm(
@@ -317,163 +281,173 @@ def calculate_indicators(data: pd.DataFrame):
 
     rs = avg_gain / (avg_loss + 1e-10)
 
-    data["RSI_14"] = 100 - (100 / (1 + rs))
+    data['RSI_14'] = (
+        100 - (100 / (1 + rs))
+    )
+
+    # MACD
+    ema12 = close.ewm(
+        span=12,
+        adjust=False
+    ).mean()
+
+    ema26 = close.ewm(
+        span=26,
+        adjust=False
+    ).mean()
+
+    data['MACD_line'] = ema12 - ema26
+
+    data['MACD_signal'] = (
+        data['MACD_line']
+        .ewm(span=9, adjust=False)
+        .mean()
+    )
+
+    data['MACD_hist'] = (
+        data['MACD_line']
+        - data['MACD_signal']
+    )
+
+    # CCI
+    tp = (high + low + close) / 3
+
+    tp_mean = tp.rolling(20).mean()
+
+    tp_std = tp.rolling(20).std()
+
+    data['CCI_20'] = (
+        (tp - tp_mean)
+        / (0.015 * tp_std + 1e-10)
+    )
 
     # MFI
     typical = (high + low + close) / 3
 
-    money_flow = typical * volume
+    rmf = typical * vol
 
-    positive_flow = money_flow.where(
-        typical > typical.shift(1),
-        0
+    pmf = rmf.where(
+        typical > typical.shift(),
+        0.0
     )
 
-    negative_flow = money_flow.where(
-        typical < typical.shift(1),
-        0
+    nmf = rmf.where(
+        typical < typical.shift(),
+        0.0
     )
 
-    positive_mf = positive_flow.rolling(14).sum()
-    negative_mf = negative_flow.rolling(14).sum()
+    mfr = (
+        pmf.rolling(14).sum()
+        / (nmf.rolling(14).sum() + 1e-10)
+    )
 
-    mfr = positive_mf / (negative_mf + 1e-10)
+    data['MFI_14'] = (
+        100 - (100 / (1 + mfr))
+    )
 
-    data["MFI_14"] = 100 - (100 / (1 + mfr))
+    # ATR
+    hl = high - low
 
-    # MACD
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
+    hc = (high - close.shift()).abs()
 
-    data["MACD_line"] = ema12 - ema26
+    lc = (low - close.shift()).abs()
 
-    data["MACD_signal"] = data[
-        "MACD_line"
-    ].ewm(
-        span=9,
+    tr = pd.concat(
+        [hl, hc, lc],
+        axis=1
+    ).max(axis=1)
+
+    atr = tr.ewm(
+        span=7,
         adjust=False
     ).mean()
 
-    data["MACD_hist"] = (
-        data["MACD_line"]
-        - data["MACD_signal"]
+    # Supertrend
+    hl2 = (high + low) / 2
+
+    upper = hl2 + 3 * atr
+
+    lower = hl2 - 3 * atr
+
+    supertrend = np.where(
+        close > upper.shift(1),
+        lower,
+        upper
+    )
+
+    data['Supertrend'] = supertrend
+
+    data['Supertrend_Signal'] = np.where(
+        close > supertrend,
+        'BUY',
+        'SELL'
     )
 
     # Returns
-    data["Prev_Close"] = close.shift(1)
+    data['Prev_Close'] = close.shift(1)
 
-    data["Returns"] = (
+    data['Returns'] = (
         close.pct_change() * 100
-    )
-
-    # Supertrend proxy
-    data["Supertrend_Signal"] = np.where(
-        close > data["EMA_20"],
-        "BUY",
-        "SELL"
     )
 
     return data
 
 
-# ── MAIN ─────────────────────────────────────────────────────────────────────
+# ── RUN ───────────────────────────────────────────────────────────────────────
 
 def run(log=print):
-
-    end_date = last_trading_day()
-
-    fetch_end = (
-        datetime.strptime(end_date, "%Y-%m-%d")
-        + timedelta(days=1)
-    ).strftime("%Y-%m-%d")
-
-    log(f"Target date: {end_date}")
 
     log("Downloading NIFTY100")
 
     download_universe(
         NIFTY100_URL,
-        "NIFTY100",
-        end_date,
-        fetch_end
+        "NIFTY100"
     )
 
     log("Downloading LARGEMIDCAP250")
 
     download_universe(
         LARGEMIDCAP_URL,
-        "NIFTY_LARGEMIDCAP250",
-        end_date,
-        fetch_end
+        "NIFTY_LARGEMIDCAP250"
     )
-
-    if not os.path.exists(MASTER_PATH):
-
-        raise FileNotFoundError(
-            f"{MASTER_PATH} missing"
-        )
 
     df = pd.read_csv(MASTER_PATH)
 
-    if df.empty:
-
-        raise ValueError(
-            "No data downloaded"
-        )
-
-    required_cols = [
-        "Date",
-        "Stock",
-        "Universe"
-    ]
-
-    if not all(
-        col in df.columns
-        for col in required_cols
-    ):
-        raise ValueError(
-            f"Missing columns: {required_cols}"
-        )
-
-    df["Date"] = pd.to_datetime(df["Date"])
-
-    # ─────────────────────────────────────────────
-    # SAFE PROCESSING
-    # ─────────────────────────────────────────────
-
-    processed_frames = []
-
-    grouped = df.groupby(
-        ["Stock", "Universe"]
+    df = df.dropna(
+        subset=['Stock', 'Universe']
     )
 
-    for (stock, universe), group in grouped:
+    df['Date'] = pd.to_datetime(
+        df['Date']
+    )
 
-        try:
+    log(
+        f"Master rows: {len(df):,}"
+    )
 
-            g = calculate_indicators(
-                group.copy()
+    output_data = {}
+
+    for u in df['Universe'].unique():
+
+        log(f"Calculating {u}")
+
+        u_df = df[
+            df['Universe'] == u
+        ].copy()
+
+        output_data[u] = (
+            u_df.groupby(
+                ['Stock', 'Universe'],
+                group_keys=False
             )
-
-            g["Stock"] = stock
-            g["Universe"] = universe
-
-            processed_frames.append(g)
-
-        except Exception as e:
-
-            print(
-                f"Indicator error {stock}: {e}"
+            .apply(
+                calculate_indicators,
+                include_groups=True
             )
-
-    if not processed_frames:
-
-        raise ValueError(
-            "No processed data"
         )
 
     combined = pd.concat(
-        processed_frames,
+        output_data.values(),
         ignore_index=True
     )
 
@@ -484,26 +458,24 @@ def run(log=print):
 
     latest = (
         combined[available_cols]
-        .sort_values("Date")
+        .sort_values('Date')
         .groupby(
-            ["Stock", "Universe"],
-            as_index=False
+            ['Stock', 'Universe'],
+            group_keys=False
         )
-        .tail(1)
+        .apply(lambda x: x.iloc[-1])
         .reset_index(drop=True)
     )
 
-    latest["Date"] = pd.to_datetime(
-        latest["Date"]
-    ).dt.strftime("%Y-%m-%d")
+    latest['Date'] = pd.to_datetime(
+        latest['Date']
+    ).dt.strftime('%Y-%m-%d')
 
     log(
         f"Snapshot: {len(latest)} rows"
     )
 
-    # ─────────────────────────────────────────────
-    # GOOGLE SHEETS
-    # ─────────────────────────────────────────────
+    # ── GOOGLE SHEETS ─────────────────────────────────
 
     gc = get_gspread_client()
 
