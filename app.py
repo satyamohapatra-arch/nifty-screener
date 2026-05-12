@@ -170,6 +170,20 @@ body {
     text-transform: uppercase;
 }
 
+/* Force light appearance */
+:root {
+    color-scheme: light !important;
+}
+
+html,
+body,
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stHeader"] {
+    background: #f4f3ee !important;
+    color: #1a1a14 !important;
+}
+
 /* SELL badge */
 .badge-sell {
     display: inline-flex !important;
