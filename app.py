@@ -192,6 +192,34 @@ section[data-testid="stSidebar"] {
     text-align: left;
 """, unsafe_allow_html=True)
 
+/* BUY badge */
+.badge-buy {
+    display: inline-block;
+    background: rgba(34,197,94,0.15) !important;
+    color: #4ade80 !important;
+    border: 1px solid rgba(34,197,94,0.25);
+
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+/* SELL badge */
+.badge-sell {
+    display: inline-block;
+    background: rgba(239,68,68,0.15) !important;
+    color: #f87171 !important;
+    border: 1px solid rgba(239,68,68,0.25);
+
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
 @st.cache_resource
