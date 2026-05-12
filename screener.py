@@ -246,9 +246,6 @@ def download_universe(
         else pd.DataFrame(columns=BASE_COLUMNS)
     )
 
-    print("NEW DATA COLUMNS:", new_data.columns.tolist())
-    print("NEW DATA SHAPE:", new_data.shape)
-
     # ── SAFE SAVE ───────────────────────────────────────
     if existing is not None:
 
@@ -427,9 +424,6 @@ def run(log=print):
 
     df['Date'] = pd.to_datetime(df['Date'])
 
-    print("MASTER DF COLUMNS:", df.columns.tolist())
-    print("MASTER DF SHAPE:", df.shape)
-
     # ── CALCULATE INDICATORS ────────────────────────────
     output_data = {}
 
@@ -444,9 +438,6 @@ def run(log=print):
         if u_df.empty:
             continue
 
-        if 'Stock' not in u_df.columns:
-            continue
-
         processed = (
             u_df.groupby(
                 ['Stock', 'Universe'],
@@ -454,6 +445,15 @@ def run(log=print):
             )
             .apply(calculate_indicators)
             .reset_index(drop=True)
+        )
+
+        # ── RESTORE IDENTITY COLUMNS ────────────────────
+        processed['Stock'] = (
+            u_df['Stock'].values[:len(processed)]
+        )
+
+        processed['Universe'] = (
+            u_df['Universe'].values[:len(processed)]
         )
 
         output_data[u] = processed
@@ -494,7 +494,6 @@ def run(log=print):
         if c in combined.columns
     ]
 
-    # Ensure identity columns always exist
     for c in required_identity_cols:
 
         if c not in available_cols:
