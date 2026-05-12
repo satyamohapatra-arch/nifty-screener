@@ -152,6 +152,14 @@ body,
     font-family: var(--font-mono);
 }
 
+/* Remove empty radio label spacing */
+.stRadio > label {
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
 /* Main layout */
 .block-container {
     max-width: 100%;
