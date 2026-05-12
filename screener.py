@@ -1,6 +1,6 @@
 """
 screener.py
-Fetches OHLCV data, calculates all indicators, pushes to Google Sheet.
+Fetches OHLCV data, calculates indicators, pushes to Google Sheet.
 Run directly: python screener.py
 """
 
@@ -21,10 +21,12 @@ from datetime import datetime, timedelta
 from google.oauth2.service_account import Credentials
 
 
-# ── CONSTANTS ─────────────────────────────────────────────────────────────────
+# ── CONSTANTS ────────────────────────────────────────────────────────────────
 
 SHEET_ID = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
-MASTER_PATH = "master_data.csv"
+
+# NEW CACHE FILE
+MASTER_PATH = "master_data_v2.csv"
 
 NIFTY100_URL = "https://drive.google.com/uc?id=1SbcUYzWZPEd2zhK1kkNndYVmkDskp9fp"
 LARGEMIDCAP_URL = "https://drive.google.com/uc?id=1BzI5KjtkkQ2H-LvUNnFXJDAki5IslJUP"
@@ -39,41 +41,27 @@ COLS = [
     'Open', 'High', 'Low', 'Close', 'Volume',
     'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
     'EMA_10', 'EMA_13', 'EMA_20', 'EMA_50', 'EMA_200',
-    'HMA_20', 'KAMA_20',
-    'Ichimoku_Tenkan', 'Ichimoku_Kijun',
-    'Supertrend', 'Supertrend_Signal',
-    'Parabolic_SAR', 'ADX_14',
-    'Donchian_High', 'Donchian_Low',
-    'RSI_14', 'MACD_line', 'MACD_signal', 'MACD_hist',
-    'Stoch_K', 'Stoch_D', 'Stoch_RSI',
-    'CCI_20', 'Williams_R', 'ROC_12', 'Ultimate_Oscillator',
-    'ATR_14',
-    'BB_Upper', 'BB_Middle', 'BB_Lower',
-    'Keltner_Upper', 'Keltner_Lower',
-    'OBV', 'VWAP', 'MFI_14', 'Pivot_Point',
-    '52W_High', '52W_Low',
-    'Fisher_Transform', 'Schaff_Trend_Cycle', 'FRAMA',
-    'Coppock_Curve', 'Mass_Index',
-    'Vortex_Pos', 'Vortex_Neg',
-    'CMO', 'TRIX',
-    'Elder_Bull_Power', 'Elder_Bear_Power',
-    'RVI',
-    'Prev_Close', 'Gap', 'Returns', 'Log_Returns',
-    'Spread', 'Volatility',
+    'RSI_14',
+    'MACD_line',
+    'MACD_signal',
+    'MACD_hist',
+    'Prev_Close',
+    'Returns',
 ]
 
 
-# ── AUTH ──────────────────────────────────────────────────────────────────────
+# ── AUTH ─────────────────────────────────────────────────────────────────────
 
 def get_gspread_client():
-    """Auth via service account JSON stored in env var or file."""
 
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
 
     if creds_json:
+
         info = json.loads(creds_json)
 
     else:
+
         with open("service_account.json") as f:
             info = json.load(f)
 
@@ -85,7 +73,7 @@ def get_gspread_client():
     return gspread.authorize(creds)
 
 
-# ── DATE HELPERS ──────────────────────────────────────────────────────────────
+# ── DATE HELPERS ─────────────────────────────────────────────────────────────
 
 def last_trading_day():
 
@@ -108,7 +96,7 @@ def last_trading_day():
     return day.strftime('%Y-%m-%d')
 
 
-# ── DOWNLOAD ──────────────────────────────────────────────────────────────────
+# ── DOWNLOAD ────────────────────────────────────────────────────────────────
 
 def download_universe(
     symbols_url: str,
@@ -142,7 +130,7 @@ def download_universe(
                 for col in required_cols
             ):
                 raise ValueError(
-                    "Corrupted master_data.csv"
+                    "Corrupted cache file"
                 )
 
             existing['Date'] = pd.to_datetime(
@@ -226,19 +214,25 @@ def download_universe(
 
             print(f"Error {stock}: {e}")
 
-    # ── COMBINE DATA ────────────────────────────────────
     new_data = (
         pd.concat(all_data, ignore_index=True)
         if all_data
         else pd.DataFrame()
     )
 
-    if existing is not None and not new_data.empty:
+    # ── SAFE SAVE ───────────────────────────────────────
+    if existing is not None:
 
-        combined = pd.concat(
-            [existing, new_data],
-            ignore_index=True
-        )
+        if not new_data.empty:
+
+            combined = pd.concat(
+                [existing, new_data],
+                ignore_index=True
+            )
+
+        else:
+
+            combined = existing.copy()
 
         combined = combined.drop_duplicates(
             subset=['Date', 'Stock', 'Universe']
@@ -250,30 +244,43 @@ def download_universe(
             combined['Universe'] == universe_name
         ]
 
-    if not new_data.empty:
+    else:
 
-        new_data.to_csv(MASTER_PATH, index=False)
+        if not new_data.empty:
 
-    return new_data
+            new_data = new_data.drop_duplicates(
+                subset=['Date', 'Stock', 'Universe']
+            )
+
+            new_data.to_csv(MASTER_PATH, index=False)
+
+        return new_data
 
 
-# ── INDICATORS ────────────────────────────────────────────────────────────────
+# ── INDICATORS ───────────────────────────────────────────────────────────────
 
-def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
+def calculate_indicators(data: pd.DataFrame):
 
     data = data.sort_values('Date').copy()
 
     close = data['Close']
 
+    # SMA
     for w in [20, 50, 100, 200]:
-        data[f'SMA_{w}'] = close.rolling(w).mean()
 
+        data[f'SMA_{w}'] = (
+            close.rolling(w).mean()
+        )
+
+    # EMA
     for w in [10, 13, 20, 50, 200]:
+
         data[f'EMA_{w}'] = close.ewm(
             span=w,
             adjust=False
         ).mean()
 
+    # RSI
     delta = close.diff()
 
     gain = delta.clip(lower=0)
@@ -294,29 +301,41 @@ def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
         100 / (1 + avg_gain / (avg_loss + 1e-10))
     )
 
-    ema12 = close.ewm(span=12, adjust=False).mean()
+    # MACD
+    ema12 = close.ewm(
+        span=12,
+        adjust=False
+    ).mean()
 
-    ema26 = close.ewm(span=26, adjust=False).mean()
+    ema26 = close.ewm(
+        span=26,
+        adjust=False
+    ).mean()
 
     data['MACD_line'] = ema12 - ema26
 
-    data['MACD_signal'] = data['MACD_line'].ewm(
+    data['MACD_signal'] = data[
+        'MACD_line'
+    ].ewm(
         span=9,
         adjust=False
     ).mean()
 
     data['MACD_hist'] = (
-        data['MACD_line'] - data['MACD_signal']
+        data['MACD_line']
+        - data['MACD_signal']
     )
 
     data['Prev_Close'] = close.shift(1)
 
-    data['Returns'] = close.pct_change() * 100
+    data['Returns'] = (
+        close.pct_change() * 100
+    )
 
     return data
 
 
-# ── MAIN ──────────────────────────────────────────────────────────────────────
+# ── MAIN ─────────────────────────────────────────────────────────────────────
 
 def run(log=print):
 
@@ -347,91 +366,37 @@ def run(log=print):
         fetch_end
     )
 
-    log("📊 Calculating indicators...")
-
-    # ── SAFE CACHE LOADING ──────────────────────────────────────
-
-    if os.path.exists(MASTER_PATH):
-
-        try:
-
-            df = pd.read_csv(MASTER_PATH)
-
-            required_cols = [
-                'Stock',
-                'Universe',
-                'Date'
-            ]
-
-            if not all(
-                col in df.columns
-                for col in required_cols
-            ):
-
-                raise ValueError(
-                    f"Corrupted cache. Missing columns: "
-                    f"{[c for c in required_cols if c not in df.columns]}"
-                )
-
-            df = df.dropna(
-                subset=['Stock', 'Universe']
-            )
-
-            if df.empty:
-                raise ValueError(
-                    "Cache became empty after cleanup."
-                )
-
-            df['Date'] = pd.to_datetime(df['Date'])
-
-        except Exception as e:
-
-            log(f"⚠ Corrupted cache detected: {e}")
-
-            log(
-                "♻ Removing corrupted master_data.csv "
-                "and rebuilding..."
-            )
-
-            os.remove(MASTER_PATH)
-
-            log("⬇ Re-downloading NIFTY100...")
-
-            download_universe(
-                NIFTY100_URL,
-                "NIFTY100",
-                end_date,
-                fetch_end
-            )
-
-            log("⬇ Re-downloading LARGEMIDCAP250...")
-
-            download_universe(
-                LARGEMIDCAP_URL,
-                "NIFTY_LARGEMIDCAP250",
-                end_date,
-                fetch_end
-            )
-
-            df = pd.read_csv(MASTER_PATH)
-
-            df = df.dropna(
-                subset=['Stock', 'Universe']
-            )
-
-            df['Date'] = pd.to_datetime(df['Date'])
-
-    else:
+    # ── LOAD CACHE ──────────────────────────────────────
+    if not os.path.exists(MASTER_PATH):
 
         raise FileNotFoundError(
-            "master_data.csv was not created correctly."
+            f"{MASTER_PATH} not created."
         )
 
+    df = pd.read_csv(MASTER_PATH)
+
+    required_cols = [
+        'Date',
+        'Stock',
+        'Universe'
+    ]
+
+    if not all(
+        col in df.columns
+        for col in required_cols
+    ):
+        raise ValueError(
+            f"Missing columns in cache: {required_cols}"
+        )
+
+    df['Date'] = pd.to_datetime(df['Date'])
+
+    # ── CALCULATE INDICATORS ────────────────────────────
     output_data = {}
 
     for u in df['Universe'].unique():
 
-        log(f"   {u}...")
+        log(f"📊 Processing {u}...")
 
         u_df = df[
             df['Universe'] == u
@@ -475,6 +440,7 @@ def run(log=print):
         f"{len(available_cols)} columns"
     )
 
+    # ── GOOGLE SHEETS ───────────────────────────────────
     log("☁ Pushing to Google Sheet...")
 
     gc = get_gspread_client()
