@@ -272,7 +272,7 @@ with st.sidebar:
                     "logic":   st.session_state.logic,
                 }
                 save_presets(st.session_state.presets)
-                st.success(f"Saved "{preset_name.strip()}"")
+                st.success(f'Saved "{preset_name.strip()}"')
                 st.rerun()
             else:
                 st.warning("Enter a name first.")
