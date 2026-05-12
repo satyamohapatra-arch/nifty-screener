@@ -124,58 +124,63 @@ def download_universe(
 
     existing = None
 
+    # ── SAFE CACHE HANDLING ─────────────────────────────
     if os.path.exists(MASTER_PATH):
 
-    try:
+        try:
 
-        existing = pd.read_csv(MASTER_PATH)
+            existing = pd.read_csv(MASTER_PATH)
 
-        required_cols = [
-            'Date',
-            'Stock',
-            'Universe'
-        ]
+            required_cols = [
+                'Date',
+                'Stock',
+                'Universe'
+            ]
 
-        if not all(
-            col in existing.columns
-            for col in required_cols
-        ):
-            raise ValueError(
-                "Corrupted master_data.csv"
+            if not all(
+                col in existing.columns
+                for col in required_cols
+            ):
+                raise ValueError(
+                    "Corrupted master_data.csv"
+                )
+
+            existing['Date'] = pd.to_datetime(
+                existing['Date']
             )
 
-        existing['Date'] = pd.to_datetime(
-            existing['Date']
-        )
+            last_date = existing[
+                existing['Universe'] == universe_name
+            ]['Date'].max()
 
-        last_date = existing[
-            existing['Universe'] == universe_name
-        ]['Date'].max()
+            if pd.isna(last_date):
 
-        if pd.isna(last_date):
+                start_date = "2021-01-01"
+
+            else:
+
+                start_date = (
+                    last_date + timedelta(days=1)
+                ).strftime('%Y-%m-%d')
+
+        except Exception as e:
+
+            print(f"Resetting corrupted cache: {e}")
+
+            if os.path.exists(MASTER_PATH):
+                os.remove(MASTER_PATH)
+
+            existing = None
+
             start_date = "2021-01-01"
 
-        else:
-            start_date = (
-                last_date + timedelta(days=1)
-            ).strftime('%Y-%m-%d')
-
-    except Exception as e:
-
-        print(f"Resetting corrupted cache: {e}")
-
-        if os.path.exists(MASTER_PATH):
-            os.remove(MASTER_PATH)
-
-        existing = None
+    else:
 
         start_date = "2021-01-01"
 
-else:
-    start_date = "2021-01-01"
-
     print(f"{universe_name} — fetching from {start_date}")
 
+    # ── ALREADY UPDATED ─────────────────────────────────
     if start_date > end_date:
 
         print(f"{universe_name} already up to date.")
@@ -186,6 +191,7 @@ else:
             else pd.DataFrame()
         )
 
+    # ── DOWNLOAD DATA ───────────────────────────────────
     all_data = []
 
     for stock in stocks:
@@ -220,6 +226,7 @@ else:
 
             print(f"Error {stock}: {e}")
 
+    # ── COMBINE DATA ────────────────────────────────────
     new_data = (
         pd.concat(all_data, ignore_index=True)
         if all_data
@@ -244,6 +251,7 @@ else:
         ]
 
     if not new_data.empty:
+
         new_data.to_csv(MASTER_PATH, index=False)
 
     return new_data
