@@ -111,82 +111,85 @@ def save_presets(presets):
 
 # ── STYLES ────────────────────────────────────────────────────────────────────
 st.markdown("""
+<style>
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+/* Main container */
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 1rem;
+    max-width: 100%;
+}
+
+/* Typography */
+h1, h2, h3, .stMetricLabel {
+    font-family: 'Inter', sans-serif !important;
+    letter-spacing: -0.02em;
+}
+
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: #0f1117;
+    border-right: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Metrics */
+[data-testid="metric-container"] {
+    background: #111827;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    padding: 18px;
+}
+
+[data-testid="stMetricValue"] {
+    font-family: 'Inter', sans-serif !important;
+    font-size: 28px !important;
+    font-weight: 700 !important;
+}
+
+/* Select boxes */
+.stSelectbox > div > div {
+    background-color: #111827;
+    border-radius: 10px;
+}
+
+/* Table wrapper */
+.tbl-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 72vh;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    background: #0f1117;
+}
+
+/* Table */
+.screener-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    min-width: 1400px;
+    font-size: 12px;
+}
+
 /* Header */
 .screener-table th {
     position: sticky;
     top: 0;
     z-index: 2;
-
     background: #161b22;
     color: #8b949e;
-
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-size: 10px;
     font-weight: 600;
-
     padding: 14px 12px;
     text-align: left;
-
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-/* Cells */
-.screener-table td {
-    padding: 13px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-    color: #f0efe8;
-
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-/* Hover */
-.screener-table tr:hover td {
-    background: rgba(255,255,255,0.03);
-}
-
-/* Badges */
-.badge-buy {
-    background: rgba(34,197,94,0.15);
-    color: #4ade80;
-    border: 1px solid rgba(34,197,94,0.25);
-
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.badge-sell {
-    background: rgba(239,68,68,0.15);
-    color: #f87171;
-    border: 1px solid rgba(239,68,68,0.25);
-
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 600;
-}
-
-/* Returns colors */
-.up  { color: #22c55e; font-weight: 600; }
-.dn  { color: #ef4444; font-weight: 600; }
-.neu { color: #9ca3af; }
-
-/* Buttons */
-.stButton button {
-    border-radius: 10px;
-    font-weight: 600;
-}
-
-/* Reduce excessive spacing */
-.element-container {
-    margin-bottom: 0.5rem;
-}
-
-</style>
 """, unsafe_allow_html=True)
 
 
