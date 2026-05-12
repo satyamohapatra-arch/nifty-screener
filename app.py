@@ -110,114 +110,70 @@ def save_presets(presets):
         json.dump(presets, f)
 
 # ── STYLES ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'IBM Plex Mono', monospace;
-}
-
-/* Main container */
-.block-container {
-    padding-top: 2rem;
-    padding-bottom: 1rem;
-    max-width: 100%;
-}
-
-/* Typography */
-h1, h2, h3, .stMetricLabel {
-    font-family: 'Inter', sans-serif !important;
-    letter-spacing: -0.02em;
-}
-
-/* Sidebar */
-section[data-testid="stSidebar"] {
-    background: #0f1117;
-    border-right: 1px solid rgba(255,255,255,0.06);
-}
-
-/* BUY badge */
-.badge-buy {
-    display: inline-block;
-    background: rgba(34,197,94,0.15) !important;
-    color: #4ade80 !important;
-    border: 1px solid rgba(34,197,94,0.25);
-
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 1.2;
 }
 
 /* SELL badge */
 .badge-sell {
     display: inline-block;
-    background: rgba(239,68,68,0.15) !important;
-    color: #f87171 !important;
-    border: 1px solid rgba(239,68,68,0.25);
-
     padding: 4px 10px;
+
     border-radius: 999px;
+    border: 1px solid rgba(194,65,65,0.15);
+
+    background: rgba(194,65,65,0.08);
+    color: var(--red);
+
     font-size: 10px;
     font-weight: 700;
-    line-height: 1.2;
 }
 
-/* Metrics */
-[data-testid="metric-container"] {
-    background: #111827;
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 14px;
-    padding: 18px;
+/* Returns */
+.up {
+    color: var(--accent2);
+    font-weight: 600;
 }
 
-[data-testid="stMetricValue"] {
-    font-family: 'Inter', sans-serif !important;
-    font-size: 28px !important;
-    font-weight: 700 !important;
+.dn {
+    color: var(--red);
+    font-weight: 600;
 }
 
-/* Select boxes */
-.stSelectbox > div > div {
-    background-color: #111827;
+.neu {
+    color: var(--text2);
+}
+
+/* Caption */
+[data-testid="stCaptionContainer"] {
+    color: var(--text3);
+}
+
+/* Expanders */
+.streamlit-expanderHeader {
+    background: var(--bg2);
+    border-radius: var(--radius);
+}
+
+/* Remove excess spacing */
+.element-container {
+    margin-bottom: 0.6rem;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--bg4);
     border-radius: 10px;
 }
 
-/* Table wrapper */
-.tbl-wrap {
-    overflow-x: auto;
-    overflow-y: auto;
-    max-height: 72vh;
-    border: 1px solid rgba(255,255,255,0.06);
-    border-radius: 14px;
-    background: #0f1117;
-}
-
-/* Table */
-.screener-table {
-    width: 100%;
-    border-collapse: collapse;
-    table-layout: fixed;
-    min-width: 1400px;
-    font-size: 12px;
-}
-
-/* Header */
-.screener-table th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: #161b22;
-    color: #8b949e;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 10px;
-    font-weight: 600;
-    padding: 14px 12px;
-    text-align: left;
+</style>
 """, unsafe_allow_html=True)
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
