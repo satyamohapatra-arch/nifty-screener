@@ -139,6 +139,87 @@ st.markdown("""
   --font-mono: 'IBM Plex Mono', monospace;
 }
 
+/* ─────────────────────────────────────────────────────────────
+
+    min-height: 48px;
+
+    font-weight: 700 !important;
+    font-size: 14px !important;
+
+    box-shadow: 0 6px 18px rgba(90,138,0,0.16);
+}
+
+.stButton button[kind="primary"]:hover {
+    transform: translateY(-1px);
+
+    box-shadow: 0 8px 22px rgba(90,138,0,0.22);
+}
+
+/* Secondary buttons */
+.stButton button,
+.stDownloadButton button,
+.stLinkButton a {
+    border-radius: 12px !important;
+
+    border: 1px solid rgba(0,0,0,0.08) !important;
+
+    background: white !important;
+
+    min-height: 44px;
+
+    font-size: 13px !important;
+    font-weight: 600 !important;
+
+    transition: all 0.15s ease;
+}
+
+.stButton button:hover,
+.stDownloadButton button:hover,
+.stLinkButton a:hover {
+    border-color: rgba(90,138,0,0.22) !important;
+
+    color: #5a8a00 !important;
+
+    background: #f7fbef !important;
+}
+
+/* Preset buttons */
+button[data-testid="baseButton-secondary"] {
+    border-radius: 12px !important;
+}
+
+/* Dividers */
+hr {
+    border-color: rgba(0,0,0,0.06) !important;
+
+    margin-top: 24px !important;
+    margin-bottom: 24px !important;
+}
+
+/* Active filter tags */
+.active-filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    background: #f5f9ee;
+
+    border: 1px solid rgba(90,138,0,0.10);
+    border-radius: 999px;
+
+    padding: 6px 12px;
+
+    color: #5a8a00;
+
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Small captions */
+[data-testid="stCaptionContainer"] {
+    color: #8c8b83 !important;
+}
+
 html, body, [class*="css"] {
     font-family: var(--font-mono);
     background: var(--bg);
