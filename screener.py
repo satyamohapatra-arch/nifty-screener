@@ -366,7 +366,7 @@ def calculate_indicators(data: pd.DataFrame):
         close.pct_change() * 100
     )
 
-    # Simple trend signal
+    # Supertrend proxy
     data["Supertrend_Signal"] = np.where(
         close > data["EMA_20"],
         "BUY",
@@ -437,39 +437,43 @@ def run(log=print):
 
     df["Date"] = pd.to_datetime(df["Date"])
 
-    output_data = {}
+    # ─────────────────────────────────────────────
+    # SAFE PROCESSING
+    # ─────────────────────────────────────────────
 
-    for u in df["Universe"].unique():
+    processed_frames = []
 
-        log(f"Processing {u}")
+    grouped = df.groupby(
+        ["Stock", "Universe"]
+    )
 
-        u_df = df[
-            df["Universe"] == u
-        ].copy()
+    for (stock, universe), group in grouped:
 
-        if u_df.empty:
-            continue
+        try:
 
-        processed = (
-            u_df.groupby(
-                ["Stock", "Universe"],
-                as_index=False,
-                group_keys=False
+            g = calculate_indicators(
+                group.copy()
             )
-            .apply(calculate_indicators)
-            .reset_index(drop=True)
-        )
 
-        output_data[u] = processed
+            g["Stock"] = stock
+            g["Universe"] = universe
 
-    if not output_data:
+            processed_frames.append(g)
+
+        except Exception as e:
+
+            print(
+                f"Indicator error {stock}: {e}"
+            )
+
+    if not processed_frames:
 
         raise ValueError(
             "No processed data"
         )
 
     combined = pd.concat(
-        output_data.values(),
+        processed_frames,
         ignore_index=True
     )
 
@@ -483,8 +487,7 @@ def run(log=print):
         .sort_values("Date")
         .groupby(
             ["Stock", "Universe"],
-            as_index=False,
-            group_keys=False
+            as_index=False
         )
         .tail(1)
         .reset_index(drop=True)
@@ -498,7 +501,9 @@ def run(log=print):
         f"Snapshot: {len(latest)} rows"
     )
 
-    # ── PUSH TO GOOGLE SHEETS ──────────────────────────
+    # ─────────────────────────────────────────────
+    # GOOGLE SHEETS
+    # ─────────────────────────────────────────────
 
     gc = get_gspread_client()
 
