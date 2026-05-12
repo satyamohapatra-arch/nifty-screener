@@ -650,8 +650,6 @@ with st.sidebar:
 
     # Universe toggle
     st.markdown('<div class="sidebar-label">Universe</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-card">', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
     univ = st.radio("Universe", ["NIFTY 100", "LargeMidCap 250", "Both"], index=2, label_visibility="collapsed")
     st.session_state.universe = {
         "NIFTY 100":       "NIFTY100",
