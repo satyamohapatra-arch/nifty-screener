@@ -111,36 +111,81 @@ def save_presets(presets):
 
 # ── STYLES ────────────────────────────────────────────────────────────────────
 st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+/* Header */
+.screener-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
 
-html, body, [class*="css"] { font-family: 'IBM Plex Mono', monospace; }
-h1, h2, h3, .stMetricLabel { font-family: 'Syne', sans-serif !important; }
+    background: #161b22;
+    color: #8b949e;
 
-/* metric cards */
-[data-testid="metric-container"] {
-    background: #111118;
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 12px;
-    padding: 14px 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 10px;
+    font-weight: 600;
+
+    padding: 14px 12px;
+    text-align: left;
+
+    border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-[data-testid="stMetricValue"] { font-family: 'Syne', sans-serif !important; font-size: 26px !important; }
 
-/* sidebar */
-section[data-testid="stSidebar"] { background: #111118; border-right: 1px solid rgba(255,255,255,0.07); }
+/* Cells */
+.screener-table td {
+    padding: 13px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: #f0efe8;
 
-/* table */
-.screener-table { width:100%; border-collapse:collapse; font-size:12px; font-family:'IBM Plex Mono',monospace; }
-.screener-table th { font-size:10px; color:#5a5958; text-transform:uppercase; letter-spacing:0.05em;
-    padding:6px 10px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.07); white-space:nowrap; }
-.screener-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,0.07); color:#f0efe8; white-space:nowrap; }
-.screener-table tr:hover td { background:#1a1a24; }
-.badge-buy  { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:500; font-family:'IBM Plex Mono',monospace;
-    background:rgba(74,240,168,0.12); color:#4af0a8; border:1px solid rgba(74,240,168,0.2); }
-.badge-sell { font-size:10px; padding:2px 8px; border-radius:4px; font-weight:500; font-family:'IBM Plex Mono',monospace;
-    background:rgba(240,74,74,0.12); color:#f04a4a; border:1px solid rgba(240,74,74,0.2); }
-.up  { color:#4af0a8; } .dn { color:#f04a4a; } .neu { color:#9b9a94; }
-.tbl-wrap { overflow-x:auto; max-height:600px; overflow-y:auto; }
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Hover */
+.screener-table tr:hover td {
+    background: rgba(255,255,255,0.03);
+}
+
+/* Badges */
+.badge-buy {
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.25);
+
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.badge-sell {
+    background: rgba(239,68,68,0.15);
+    color: #f87171;
+    border: 1px solid rgba(239,68,68,0.25);
+
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* Returns colors */
+.up  { color: #22c55e; font-weight: 600; }
+.dn  { color: #ef4444; font-weight: 600; }
+.neu { color: #9ca3af; }
+
+/* Buttons */
+.stButton button {
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* Reduce excessive spacing */
+.element-container {
+    margin-bottom: 0.5rem;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -369,7 +414,7 @@ if data_ok and not df.empty:
     filtered = apply_filters(view_df, st.session_state.filters, st.session_state.logic)
 
     # Sort controls
-    sort_col, sort_dir = st.columns([3, 1])
+    sort_col, sort_dir = st.columns([5, 1.5], vertical_alignment="bottom")
     with sort_col:
         sort_by = st.selectbox("Sort by", ["Returns", "Close", "Volume", "RSI_14", "MFI_14", "Open", "High", "Low"],
                                label_visibility="visible", key="sort_by")
@@ -383,7 +428,7 @@ if data_ok and not df.empty:
     last_date = df['Date'].max() if 'Date' in df.columns else "—"
     buy_count = (filtered['Supertrend_Signal'].astype(str).str.upper()=="BUY").sum() if 'Supertrend_Signal' in filtered.columns else 0
 
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4 = st.columns([1,1,1,1], gap="medium")
     k1.metric("Total Stocks", len(view_df))
     k2.metric("Matching", len(filtered))
     k3.metric("Active Filters", len(st.session_state.filters))
