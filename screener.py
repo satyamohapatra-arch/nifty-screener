@@ -442,7 +442,7 @@ def run(log=print):
         u_df = df[df['Universe'] == u].copy()
         output_data[u] = (
             u_df.groupby(['Stock', 'Universe'], group_keys=False)
-                 .apply(calculate_indicators, include_groups=True)
+                 .apply(calculate_indicators)
         )
 
     combined = pd.concat(output_data.values(), ignore_index=True)
