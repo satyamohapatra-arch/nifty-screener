@@ -489,9 +489,11 @@ def run(log=print):
     for u in df['Universe'].unique():
         log(f"Calculating indicators for {u}...")
         u_df = df[df['Universe'] == u].copy()
+        # include_groups removed in pandas 3.x — groupby on Stock only,
+        # Universe col stays in the df so calculate_indicators sees it.
         output_data[u] = (
-            u_df.groupby(['Stock', 'Universe'], group_keys=False)
-                .apply(calculate_indicators, include_groups=True)
+            u_df.groupby('Stock', group_keys=False)
+                .apply(calculate_indicators)
         )
 
     combined = pd.concat(output_data.values(), ignore_index=True)
