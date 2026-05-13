@@ -18,7 +18,6 @@ from google.oauth2.service_account import Credentials
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 
 SHEET_ID        = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
-MASTER_PATH     = "master_data.csv"
 NIFTY100_URL    = "https://drive.google.com/uc?id=1SbcUYzWZPEd2zhK1kkNndYVmkDskp9fp"
 LARGEMIDCAP_URL = "https://drive.google.com/uc?id=1BzI5KjtkkQ2H-LvUNnFXJDAki5IslJUP"
 
@@ -107,14 +106,15 @@ def last_trading_day():
 # ── DOWNLOAD ──────────────────────────────────────────────────────────────────
 
 def download_universe(symbols_url, universe_name, log=print):
+    master_path = f"master_data_{universe_name}.csv"  # separate file per universe
     stocks    = [s + ".NS" for s in pd.read_csv(symbols_url)["Symbol"].tolist()]
     END_DATE  = last_trading_day()
     FETCH_END = (datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
 
-    if os.path.exists(MASTER_PATH):
-        existing = pd.read_csv(MASTER_PATH)
+    if os.path.exists(master_path):
+        existing = pd.read_csv(master_path)
         existing['Date'] = pd.to_datetime(existing['Date'])
-        last_date = existing[existing['Universe'] == universe_name]['Date'].max()
+        last_date = existing['Date'].max()
         if pd.isna(last_date):
             start_date = "2021-01-01"
             log(f"{universe_name} — no existing data, full download")
@@ -128,7 +128,7 @@ def download_universe(symbols_url, universe_name, log=print):
 
     if start_date > END_DATE:
         log(f"{universe_name} already up to date.")
-        return existing[existing['Universe'] == universe_name] if existing is not None else pd.DataFrame()
+        return existing if existing is not None else pd.DataFrame()
 
     all_data = []
     for stock in stocks:
@@ -136,6 +136,7 @@ def download_universe(symbols_url, universe_name, log=print):
             df = yf.download(stock, start=start_date, end=FETCH_END,
                              interval="1d", auto_adjust=False, progress=False)
             if df.empty:
+                log(f"Empty data {stock} — skipped")
                 continue
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
@@ -150,12 +151,12 @@ def download_universe(symbols_url, universe_name, log=print):
 
     if existing is not None and not new_data.empty:
         combined = pd.concat([existing, new_data], ignore_index=True)
-        combined = combined.drop_duplicates(subset=['Date', 'Stock', 'Universe'])
-        combined.to_csv(MASTER_PATH, index=False)
-        return combined[combined['Universe'] == universe_name]
+        combined = combined.drop_duplicates(subset=['Date', 'Stock'])
+        combined.to_csv(master_path, index=False)
+        return combined
 
     if not new_data.empty:
-        new_data.to_csv(MASTER_PATH, index=False)
+        new_data.to_csv(master_path, index=False)
     return new_data
 
 # ── INDICATORS (full 68-col suite, identical to Colab) ───────────────────────
@@ -163,6 +164,8 @@ def download_universe(symbols_url, universe_name, log=print):
 def calculate_indicators(data):
     data  = data.sort_values('Date').copy()
     n     = len(data)
+    if n < 30:
+        return data  # too short for any indicator — return raw
     close = data['Close']
     high  = data['High']
     low   = data['Low']
@@ -480,15 +483,27 @@ def run(log=print):
     log("Downloading NIFTY_LARGEMIDCAP250...")
     download_universe(LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250", log=log)
 
-    df = pd.read_csv(MASTER_PATH)
+    universes = [
+        (NIFTY100_URL,    "NIFTY100"),
+        (LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250"),
+    ]
+
+    all_frames = []
+    for _, u_name in universes:
+        path = f"master_data_{u_name}.csv"
+        if os.path.exists(path):
+            u_df = pd.read_csv(path)
+            u_df['Date'] = pd.to_datetime(u_df['Date'])
+            all_frames.append(u_df)
+
+    df = pd.concat(all_frames, ignore_index=True) if all_frames else pd.DataFrame()
     df = df.dropna(subset=['Stock', 'Universe'])
-    df['Date'] = pd.to_datetime(df['Date'])
     log(f"Master: {len(df):,} rows | {df['Stock'].nunique()} stocks | latest: {df['Date'].max().date()}")
 
     all_results = []
-    for u in df['Universe'].unique():
-        log(f"Calculating indicators for {u}...")
-        u_df = df[df['Universe'] == u].copy()
+    for _, u_name in universes:
+        log(f"Calculating indicators for {u_name}...")
+        u_df = df[df['Universe'] == u_name].copy()
         for stock, grp in u_df.groupby('Stock', group_keys=False):
             try:
                 all_results.append(calculate_indicators(grp.copy()))
