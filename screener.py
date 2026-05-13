@@ -77,18 +77,25 @@ COLS = [
 # ── GOOGLE AUTH ───────────────────────────────────────────────────────────────
 
 def get_gspread_client():
+    # 1. Environment variable (GitHub Actions)
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+
+    # 2. Streamlit secrets (Streamlit Cloud)
     if not creds_json:
         try:
             import streamlit as st
-            creds_json = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"]
+            val = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"]
+            creds_json = json.dumps(dict(val)) if hasattr(val, 'keys') else val
         except Exception:
             pass
+
+    # 3. Local service_account.json fallback
     if creds_json:
         info = json.loads(creds_json) if isinstance(creds_json, str) else dict(creds_json)
     else:
         with open("service_account.json") as f:
             info = json.load(f)
+
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
