@@ -496,14 +496,13 @@ def run(log=print):
                 .apply(calculate_indicators)
         )
 
-    combined = pd.concat(output_data.values(), ignore_index=True)
+    combined = pd.concat(output_data.values(), ignore_index=True).reset_index(drop=True)
 
     available_cols = [c for c in COLS if c in combined.columns]
     latest = (
         combined[available_cols]
         .sort_values('Date')
-        .groupby(['Stock', 'Universe'], group_keys=False)
-        .apply(lambda x: x.iloc[-1])
+        .drop_duplicates(subset=['Stock', 'Universe'], keep='last')
         .reset_index(drop=True)
     )
     latest['Date'] = pd.to_datetime(latest['Date']).dt.strftime('%Y-%m-%d')
