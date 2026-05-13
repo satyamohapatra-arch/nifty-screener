@@ -485,18 +485,17 @@ def run(log=print):
     df['Date'] = pd.to_datetime(df['Date'])
     log(f"Master: {len(df):,} rows | {df['Stock'].nunique()} stocks | latest: {df['Date'].max().date()}")
 
-    output_data = {}
+    all_results = []
     for u in df['Universe'].unique():
         log(f"Calculating indicators for {u}...")
         u_df = df[df['Universe'] == u].copy()
-        # include_groups removed in pandas 3.x — groupby on Stock only,
-        # Universe col stays in the df so calculate_indicators sees it.
-        output_data[u] = (
-            u_df.groupby('Stock', group_keys=False)
-                .apply(calculate_indicators)
-        )
+        for stock, grp in u_df.groupby('Stock', group_keys=False):
+            try:
+                all_results.append(calculate_indicators(grp.copy()))
+            except Exception as e:
+                log(f"Skipping {stock}: {e}")
 
-    combined = pd.concat(output_data.values(), ignore_index=True).reset_index(drop=True)
+    combined = pd.concat(all_results, ignore_index=True)
 
     available_cols = [c for c in COLS if c in combined.columns]
     latest = (
