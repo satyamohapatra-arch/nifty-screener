@@ -477,6 +477,11 @@ def calculate_indicators(data):
 # ── RUN ───────────────────────────────────────────────────────────────────────
 
 def run(log=print):
+    # Remove old shared master file if it exists — prevents universe tag corruption
+    if os.path.exists("master_data.csv"):
+        os.remove("master_data.csv")
+        log("Removed legacy master_data.csv")
+
     log("Downloading NIFTY100...")
     download_universe(NIFTY100_URL, "NIFTY100", log=log)
 
