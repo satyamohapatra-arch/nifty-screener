@@ -603,19 +603,40 @@ def apply_filters(df, filters, logic):
         return df
     masks = []
     for f in filters:
-        col, op, val = f['col'], f['op'], f['val']
+        col      = f['col']
+        op       = f['op']
+        val      = f['val']
+        val_type = f.get('val_type', 'number')   # 'number' or 'column'
+
         if col not in df.columns:
             continue
-        if op == '==' and isinstance(val, str):
+
+        left = pd.to_numeric(df[col], errors='coerce')
+
+        # Text filter (BUY / SELL)
+        if op == '==' and val_type == 'number' and isinstance(val, str):
             masks.append(df[col].astype(str).str.upper() == val.upper())
-        elif op == '>':
-            masks.append(pd.to_numeric(df[col], errors='coerce') > float(val))
+            continue
+
+        # Right-hand side: another column or a fixed number
+        if val_type == 'column':
+            if val not in df.columns:
+                continue
+            right = pd.to_numeric(df[val], errors='coerce')
+        else:
+            right = float(val)
+
+        if op == '>':
+            masks.append(left > right)
         elif op == '<':
-            masks.append(pd.to_numeric(df[col], errors='coerce') < float(val))
+            masks.append(left < right)
         elif op == '>=':
-            masks.append(pd.to_numeric(df[col], errors='coerce') >= float(val))
+            masks.append(left >= right)
         elif op == '<=':
-            masks.append(pd.to_numeric(df[col], errors='coerce') <= float(val))
+            masks.append(left <= right)
+        elif op == '==':
+            masks.append(left == right)
+
     if not masks:
         return df
     combined = masks[0]
@@ -667,18 +688,50 @@ with st.sidebar:
 
     is_text = vmin is None
     if is_text:
-        op  = "=="
-        val = st.selectbox("Value", ["BUY", "SELL"])
+        op       = "=="
+        val      = st.selectbox("Value", ["BUY", "SELL"])
+        val_type = "number"
+        val_display = val
     else:
-        op  = st.selectbox("Operator", [">", "<", ">=", "<="])
-        val = st.number_input("Threshold", value=float(vdefault), step=0.1, format="%.2f")
+        op = st.selectbox("Operator", [">", "<", ">=", "<="])
+
+        # ── Toggle: fixed number vs another column ──────────────────────────
+        threshold_mode = st.radio(
+            "Threshold type",
+            ["Fixed Value", "Another Column"],
+            horizontal=True,
+            key="threshold_mode",
+            label_visibility="collapsed",
+        )
+
+        if threshold_mode == "Fixed Value":
+            val      = st.number_input("Threshold", value=float(vdefault), step=0.1, format="%.2f")
+            val_type = "number"
+            val_display = f"{val:.2f}"
+        else:
+            # All numeric indicator labels except the currently selected one
+            numeric_labels = [
+                lbl for lbl, (c, mn, mx, _) in ALL_INDICATORS.items()
+                if mn is not None and lbl != sel_indicator
+            ]
+            val_col_label = st.selectbox(
+                "Compare to column",
+                numeric_labels,
+                key="val_col",
+                label_visibility="visible",
+            )
+            val         = ALL_INDICATORS[val_col_label][0]   # actual column name
+            val_type    = "column"
+            val_display = val_col_label
 
     if st.button("＋ Add Filter", use_container_width=True, type="primary"):
         st.session_state.filters.append({
-            "label": sel_indicator,
-            "col":   col_name,
-            "op":    op,
-            "val":   val,
+            "label":   sel_indicator,
+            "col":     col_name,
+            "op":      op,
+            "val":     val,
+            "val_type": val_type,
+            "display": f"{sel_indicator} {op} {val_display}",
         })
         st.rerun()
 
@@ -735,8 +788,11 @@ with st.sidebar:
         for i, f in enumerate(st.session_state.filters):
             col_a, col_b = st.columns([4, 1])
             with col_a:
-                val_str = f['val'] if isinstance(f['val'], str) else f"{f['val']:.2f}"
-                st.caption(f"`{f['label']}` {f['op']} {val_str}")
+                display = f.get('display') or (
+                    f"`{f['label']}` {f['op']} " +
+                    (f['val'] if isinstance(f['val'], str) else f"{f['val']:.2f}")
+                )
+                st.caption(display)
             with col_b:
                 if st.button("✕", key=f"rm_{i}"):
                     to_remove.append(i)
