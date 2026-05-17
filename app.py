@@ -1013,10 +1013,6 @@ if data_ok and not df.empty:
                     unsafe_allow_html=True
                 )
 
-    # ── SESSION STATE for clicked stock ──────────────────────────────────────
-    if 'clicked_stock_key' not in st.session_state:
-        st.session_state.clicked_stock_key = None
-
     # ── RESULTS TABLE ─────────────────────────────────────────────────────────
     if filtered.empty:
         st.info("∅ No stocks match active filters. Relax a threshold or switch to OR logic.")
@@ -1040,132 +1036,88 @@ if data_ok and not df.empty:
             if v == "SELL": return '<span class="badge-sell">SELL</span>'
             return v
 
-        # Build row keys list for the hidden selectbox (blank = nothing selected)
-        NONE_KEY = "__none__"
-        row_keys = [NONE_KEY]
-        rows_html = []
-        for idx, (_, row) in enumerate(filtered.iterrows()):
-            stock   = str(row.get('Stock', '')).replace('.NS', '')
-            univ    = "N100" if str(row.get('Universe', '')) == "NIFTY100" else "LMC"
-            row_key = str(row.get('Stock', '')) + "||" + str(row.get('Universe', ''))
-            row_keys.append(row_key)
-            row_bg  = "#fafaf8" if idx % 2 == 0 else "#ffffff"
-            rows_html.append(f"""<tr style="background:{row_bg}">
-                <td><span class="stock-link" data-key="{row_key}">{stock}</span></td>
-                <td><span style="color:#9b9a94;font-size:10px">{univ}</span></td>
-                <td>{fmt(row.get('Open'))}</td>
-                <td>{fmt(row.get('High'))}</td>
-                <td>{fmt(row.get('Low'))}</td>
-                <td>{fmt(row.get('Close'))}</td>
-                <td>{fmt(row.get('Prev_Close'))}</td>
-                <td>{ret_class(row.get('Returns'))}</td>
-                <td>{fmt(row.get('Volume'), 0)}</td>
-                <td>{fmt(row.get('RSI_14'))}</td>
-                <td>{fmt(row.get('MFI_14'))}</td>
-                <td>{signal_badge(row.get('Supertrend_Signal', ''))}</td>
-            </tr>""")
-
-        # ── Hidden selectbox — JS will programmatically change this ───────
-        # Collapsed to 0 height via CSS on its wrapping element
+        # ── Ghost-button CSS: stock name button looks like plain bold text ──
         st.markdown("""
         <style>
-          /* Hide the stock selector selectbox visually */
-          [data-testid="stSelectbox"][aria-label="stock-click-selector"],
-          div:has(> [data-testid="stSelectbox"] select option[value="__none__"]) {
-            position: absolute !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-            height: 0 !important;
-            overflow: hidden !important;
-          }
+        .stock-btn-row button {
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 2px !important;
+            margin: 0 !important;
+            min-height: unset !important;
+            height: auto !important;
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            font-family: 'IBM Plex Mono', monospace !important;
+            color: #1a1a14 !important;
+            text-decoration: underline !important;
+            text-decoration-color: rgba(90,138,0,0.4) !important;
+            text-underline-offset: 3px !important;
+            letter-spacing: 0 !important;
+            justify-content: flex-start !important;
+            width: auto !important;
+        }
+        .stock-btn-row button:hover {
+            color: #5a8a00 !important;
+            background: none !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .stock-btn-row button:focus {
+            box-shadow: none !important;
+            outline: none !important;
+        }
         </style>
         """, unsafe_allow_html=True)
 
-        selected_key = st.selectbox(
-            "stock-click-selector",
-            options=row_keys,
-            index=0,
-            key="stock_selector",
-            label_visibility="collapsed",
-        )
+        COL_W  = [1.8, 0.7, 1.1, 1.1, 1.1, 1.1, 1.1, 1.0, 1.6, 0.9, 0.9, 1.0]
+        BORDER = "border-bottom:1px solid rgba(0,0,0,0.06);"
+        CELL   = f"padding:10px 4px;white-space:nowrap;font-size:12px;{BORDER}"
 
-        # ── HTML table (original look) ─────────────────────────────────────
-        st.markdown(f"""
-        <div class="tbl-wrap">
-        <table class="screener-table">
-          <thead><tr>
-            <th>Stock</th><th>Univ</th>
-            <th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Prev Close</th>
-            <th>Return%</th><th>Volume</th><th>RSI</th><th>MFI</th><th>Signal</th>
-          </tr></thead>
-          <tbody>{"".join(rows_html)}</tbody>
-        </table>
-        </div>
-        <style>
-          .stock-link {{
-            font-weight: 600; cursor: pointer; color: #1a1a14;
-            text-decoration: underline;
-            text-decoration-color: rgba(90,138,0,0.35);
-            text-underline-offset: 3px; transition: color 0.15s;
-          }}
-          .stock-link:hover {{ color: #5a8a00; }}
-        </style>
-        <script>
-          // Wait for Streamlit's React tree to settle, then wire up clicks
-          function wireStockLinks() {{
-            // Find the hidden selectbox input by its label text
-            const selects = window.parent.document.querySelectorAll('select');
-            let targetSelect = null;
-            for (const s of selects) {{
-              // The selectbox options contain our row keys
-              if (s.options.length > 1 && s.options[1] && s.options[1].value.includes('||')) {{
-                targetSelect = s;
-                break;
-              }}
-            }}
+        # ── Header row ────────────────────────────────────────────────────
+        hcols = st.columns(COL_W)
+        for hc, lbl in zip(hcols, [
+            "STOCK","UNIV","OPEN","HIGH","LOW","CLOSE","PREV CLOSE","RETURN%","VOLUME","RSI","MFI","SIGNAL"
+        ]):
+            hc.markdown(
+                f"<div style='font-size:10px;font-weight:600;color:#9a9990;"
+                f"text-transform:uppercase;letter-spacing:0.05em;"
+                f"padding:8px 4px 6px 4px;border-bottom:2px solid rgba(0,0,0,0.10);'>"
+                f"{lbl}</div>", unsafe_allow_html=True)
 
-            document.querySelectorAll('.stock-link').forEach(function(el) {{
-              el.addEventListener('click', function() {{
-                const key = el.getAttribute('data-key');
-                if (targetSelect) {{
-                  // Find the matching option index and select it
-                  for (let i = 0; i < targetSelect.options.length; i++) {{
-                    if (targetSelect.options[i].value === key) {{
-                      targetSelect.selectedIndex = i;
-                      // Dispatch native React change event so Streamlit picks it up
-                      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                        window.HTMLSelectElement.prototype, 'value'
-                      ).set;
-                      nativeInputValueSetter.call(targetSelect, key);
-                      targetSelect.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                      break;
-                    }}
-                  }}
-                }}
-              }});
-            }});
-          }}
-          // Give Streamlit time to render the selectbox into the DOM
-          setTimeout(wireStockLinks, 800);
-        </script>
-        """, unsafe_allow_html=True)
+        # ── Data rows ─────────────────────────────────────────────────────
+        clicked_row = None
+        for idx, (_, row) in enumerate(filtered.iterrows()):
+            stock  = str(row.get('Stock','')).replace('.NS','')
+            univ   = "N100" if str(row.get('Universe',''))=="NIFTY100" else "LMC"
+            rcols  = st.columns(COL_W)
 
-        # ── Open dialog when selectbox value changes ───────────────────────
-        if selected_key and selected_key != NONE_KEY:
-            parts = selected_key.split("||")
-            if len(parts) == 2:
-                ticker, universe = parts[0], parts[1]
-                match = filtered[
-                    (filtered['Stock'] == ticker) &
-                    (filtered['Universe'] == universe)
-                ]
-                if match.empty:
-                    match = df[
-                        (df['Stock'] == ticker) &
-                        (df['Universe'] == universe)
-                    ]
-                if not match.empty:
-                    show_stock_detail(match.iloc[0])
+            with rcols[0]:
+                st.markdown('<div class="stock-btn-row">', unsafe_allow_html=True)
+                if st.button(stock, key=f"sb_{idx}_{stock}_{univ}"):
+                    clicked_row = row
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            rcols[1].markdown(f"<div style='{CELL}color:#9a9990;font-size:11px'>{univ}</div>", unsafe_allow_html=True)
+            for rc, val, dec in [
+                (rcols[2], row.get('Open'),      2),
+                (rcols[3], row.get('High'),       2),
+                (rcols[4], row.get('Low'),        2),
+                (rcols[5], row.get('Close'),      2),
+                (rcols[6], row.get('Prev_Close'), 2),
+            ]:
+                rc.markdown(f"<div style='{CELL}'>{fmt(val,dec)}</div>", unsafe_allow_html=True)
+
+            rcols[7].markdown(f"<div style='{CELL}'>{ret_class(row.get('Returns'))}</div>", unsafe_allow_html=True)
+            rcols[8].markdown(f"<div style='{CELL}'>{fmt(row.get('Volume'),0)}</div>", unsafe_allow_html=True)
+            rcols[9].markdown(f"<div style='{CELL}'>{fmt(row.get('RSI_14'))}</div>", unsafe_allow_html=True)
+            rcols[10].markdown(f"<div style='{CELL}'>{fmt(row.get('MFI_14'))}</div>", unsafe_allow_html=True)
+            rcols[11].markdown(f"<div style='{CELL}'>{signal_badge(row.get('Supertrend_Signal',''))}</div>", unsafe_allow_html=True)
+
+        # ── Open dialog for clicked stock ─────────────────────────────────
+        if clicked_row is not None:
+            show_stock_detail(clicked_row)
 
         st.caption(f"{len(filtered)} stocks · {st.session_state.logic} logic · sorted by {sort_by}")
 
