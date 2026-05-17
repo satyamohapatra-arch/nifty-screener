@@ -1040,18 +1040,18 @@ if data_ok and not df.empty:
             if v == "SELL": return '<span class="badge-sell">SELL</span>'
             return v
 
-        # Build rows — stock cell is a clickable link that postMessages the key
+        # Build row keys list for the hidden selectbox (blank = nothing selected)
+        NONE_KEY = "__none__"
+        row_keys = [NONE_KEY]
         rows_html = []
         for idx, (_, row) in enumerate(filtered.iterrows()):
             stock   = str(row.get('Stock', '')).replace('.NS', '')
             univ    = "N100" if str(row.get('Universe', '')) == "NIFTY100" else "LMC"
-            # unique key = original stock ticker + universe so we can look it up
             row_key = str(row.get('Stock', '')) + "||" + str(row.get('Universe', ''))
+            row_keys.append(row_key)
             row_bg  = "#fafaf8" if idx % 2 == 0 else "#ffffff"
             rows_html.append(f"""<tr style="background:{row_bg}">
-                <td>
-                  <span class="stock-link" data-key="{row_key}">{stock}</span>
-                </td>
+                <td><span class="stock-link" data-key="{row_key}">{stock}</span></td>
                 <td><span style="color:#9b9a94;font-size:10px">{univ}</span></td>
                 <td>{fmt(row.get('Open'))}</td>
                 <td>{fmt(row.get('High'))}</td>
@@ -1065,7 +1065,32 @@ if data_ok and not df.empty:
                 <td>{signal_badge(row.get('Supertrend_Signal', ''))}</td>
             </tr>""")
 
-        table_html = f"""
+        # ── Hidden selectbox — JS will programmatically change this ───────
+        # Collapsed to 0 height via CSS on its wrapping element
+        st.markdown("""
+        <style>
+          /* Hide the stock selector selectbox visually */
+          [data-testid="stSelectbox"][aria-label="stock-click-selector"],
+          div:has(> [data-testid="stSelectbox"] select option[value="__none__"]) {
+            position: absolute !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            height: 0 !important;
+            overflow: hidden !important;
+          }
+        </style>
+        """, unsafe_allow_html=True)
+
+        selected_key = st.selectbox(
+            "stock-click-selector",
+            options=row_keys,
+            index=0,
+            key="stock_selector",
+            label_visibility="collapsed",
+        )
+
+        # ── HTML table (original look) ─────────────────────────────────────
+        st.markdown(f"""
         <div class="tbl-wrap">
         <table class="screener-table">
           <thead><tr>
@@ -1076,90 +1101,58 @@ if data_ok and not df.empty:
           <tbody>{"".join(rows_html)}</tbody>
         </table>
         </div>
-        """
-        # Styles that match the main app (duplicated here for the iframe context)
-        table_styles = """
         <style>
-          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { background: transparent; font-family: 'IBM Plex Mono', monospace; }
-          .tbl-wrap {
-            overflow-x: auto; overflow-y: auto; max-height: 72vh;
-            background: #ffffff; border: 1px solid rgba(0,0,0,0.08);
-            border-radius: 18px;
-          }
-          .screener-table { width: 100%; border-collapse: collapse; min-width: 1200px; font-size: 12px; }
-          .screener-table th {
-            position: sticky; top: 0; z-index: 5; background: #ffffff;
-            color: #9a9990; text-transform: uppercase; letter-spacing: 0.05em;
-            font-size: 10px; font-weight: 600; padding: 12px; text-align: left;
-            border-bottom: 1px solid rgba(0,0,0,0.08); white-space: nowrap;
-          }
-          .screener-table td { padding: 12px; border-bottom: 1px solid rgba(0,0,0,0.06); white-space: nowrap; }
-          .screener-table tr:last-child td { border-bottom: none; }
-          .screener-table tr:hover td { background: #eeede8; }
-          .stock-link {
+          .stock-link {{
             font-weight: 600; cursor: pointer; color: #1a1a14;
-            text-decoration: underline; text-decoration-color: rgba(90,138,0,0.35);
+            text-decoration: underline;
+            text-decoration-color: rgba(90,138,0,0.35);
             text-underline-offset: 3px; transition: color 0.15s;
-          }
-          .stock-link:hover { color: #5a8a00; }
-          .up   { color: #008a58; font-weight: 600; }
-          .dn   { color: #c24141; font-weight: 600; }
-          .neu  { color: #5a5950; }
-          .badge-buy  {
-            display: inline-flex; align-items: center; justify-content: center;
-            padding: 4px 10px; border-radius: 999px;
-            border: 1px solid rgba(0,138,88,0.18); background: rgba(0,138,88,0.10);
-            color: #008a58; font-size: 10px; font-weight: 700; text-transform: uppercase;
-          }
-          .badge-sell {
-            display: inline-flex; align-items: center; justify-content: center;
-            padding: 4px 10px; border-radius: 999px;
-            border: 1px solid rgba(194,65,65,0.18); background: rgba(194,65,65,0.10);
-            color: #c24141; font-size: 10px; font-weight: 700; text-transform: uppercase;
-          }
+          }}
+          .stock-link:hover {{ color: #5a8a00; }}
         </style>
-        """
-        table_script = """
         <script>
-          document.querySelectorAll('.stock-link').forEach(function(el) {
-            el.addEventListener('click', function() {
-              const key = el.getAttribute('data-key');
-              // postMessage to the Streamlit parent frame
-              window.parent.postMessage({ type: 'stock_click', key: key }, '*');
-            });
-          });
+          // Wait for Streamlit's React tree to settle, then wire up clicks
+          function wireStockLinks() {{
+            // Find the hidden selectbox input by its label text
+            const selects = window.parent.document.querySelectorAll('select');
+            let targetSelect = null;
+            for (const s of selects) {{
+              // The selectbox options contain our row keys
+              if (s.options.length > 1 && s.options[1] && s.options[1].value.includes('||')) {{
+                targetSelect = s;
+                break;
+              }}
+            }}
+
+            document.querySelectorAll('.stock-link').forEach(function(el) {{
+              el.addEventListener('click', function() {{
+                const key = el.getAttribute('data-key');
+                if (targetSelect) {{
+                  // Find the matching option index and select it
+                  for (let i = 0; i < targetSelect.options.length; i++) {{
+                    if (targetSelect.options[i].value === key) {{
+                      targetSelect.selectedIndex = i;
+                      // Dispatch native React change event so Streamlit picks it up
+                      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                        window.HTMLSelectElement.prototype, 'value'
+                      ).set;
+                      nativeInputValueSetter.call(targetSelect, key);
+                      targetSelect.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                      break;
+                    }}
+                  }}
+                }}
+              }});
+            }});
+          }}
+          // Give Streamlit time to render the selectbox into the DOM
+          setTimeout(wireStockLinks, 800);
         </script>
-        """
+        """, unsafe_allow_html=True)
 
-        import streamlit.components.v1 as components
-        components.html(table_styles + table_html + table_script, height=600, scrolling=False)
-
-        # ── Receive postMessage via a second components.html listener ─────
-        # This component receives the message and sets a query param to trigger rerun
-        components.html("""
-        <script>
-          window.addEventListener('message', function(e) {
-            if (e.data && e.data.type === 'stock_click') {
-              // Set query param on the parent Streamlit page URL and reload
-              const url = new URL(window.parent.location.href);
-              url.searchParams.set('clicked_stock', e.data.key);
-              window.parent.location.replace(url.toString());
-            }
-          });
-        </script>
-        """, height=0)
-
-        # ── Pick up query param set by the postMessage listener ──────────
-        clicked = st.query_params.get("clicked_stock", None)
-        if clicked and clicked != st.session_state.clicked_stock_key:
-            st.session_state.clicked_stock_key = clicked
-
-        # ── Open dialog if a stock was clicked ────────────────────────────
-        if st.session_state.clicked_stock_key:
-            key   = st.session_state.clicked_stock_key
-            parts = key.split("||")
+        # ── Open dialog when selectbox value changes ───────────────────────
+        if selected_key and selected_key != NONE_KEY:
+            parts = selected_key.split("||")
             if len(parts) == 2:
                 ticker, universe = parts[0], parts[1]
                 match = filtered[
@@ -1172,9 +1165,6 @@ if data_ok and not df.empty:
                         (df['Universe'] == universe)
                     ]
                 if not match.empty:
-                    # Clear so dialog doesn't re-open on next rerun
-                    st.session_state.clicked_stock_key = None
-                    st.query_params.pop("clicked_stock", None)
                     show_stock_detail(match.iloc[0])
 
         st.caption(f"{len(filtered)} stocks · {st.session_state.logic} logic · sorted by {sort_by}")
