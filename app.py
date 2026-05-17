@@ -1013,6 +1013,10 @@ if data_ok and not df.empty:
                     unsafe_allow_html=True
                 )
 
+    # ── SESSION STATE for clicked stock ──────────────────────────────────────
+    if 'clicked_stock_key' not in st.session_state:
+        st.session_state.clicked_stock_key = None
+
     # ── RESULTS TABLE ─────────────────────────────────────────────────────────
     if filtered.empty:
         st.info("∅ No stocks match active filters. Relax a threshold or switch to OR logic.")
@@ -1022,7 +1026,7 @@ if data_ok and not df.empty:
             try: return f"{float(val):.{decimals}f}"
             except: return str(val)
 
-        def ret_html(val):
+        def ret_class(val):
             try:
                 v = float(val)
                 cls = "up" if v > 0 else ("dn" if v < 0 else "neu")
@@ -1036,84 +1040,142 @@ if data_ok and not df.empty:
             if v == "SELL": return '<span class="badge-sell">SELL</span>'
             return v
 
-        # ── Column headers ─────────────────────────────────────────────────
-        hcols = st.columns([1.8, 0.8, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 1.5, 1.0, 1.0, 1.1])
-        for hc, label in zip(hcols, [
-            "STOCK","UNIV","OPEN","HIGH","LOW","CLOSE","PREV CLOSE","RETURN%","VOLUME","RSI","MFI","SIGNAL"
-        ]):
-            hc.markdown(
-                f"<div style='font-size:10px;font-weight:600;color:#9a9990;"
-                f"text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px 0;"
-                f"border-bottom:1px solid rgba(0,0,0,0.08);'>{label}</div>",
-                unsafe_allow_html=True
-            )
-
-        # ── Rows ───────────────────────────────────────────────────────────
+        # Build rows — stock cell is a clickable link that postMessages the key
+        rows_html = []
         for idx, (_, row) in enumerate(filtered.iterrows()):
-            stock     = str(row.get('Stock', '')).replace('.NS', '')
-            univ      = "N100" if str(row.get('Universe', '')) == "NIFTY100" else "LMC"
-            ret_v     = row.get('Returns', None)
-            signal_v  = str(row.get('Supertrend_Signal', '')).upper()
+            stock   = str(row.get('Stock', '')).replace('.NS', '')
+            univ    = "N100" if str(row.get('Universe', '')) == "NIFTY100" else "LMC"
+            # unique key = original stock ticker + universe so we can look it up
+            row_key = str(row.get('Stock', '')) + "||" + str(row.get('Universe', ''))
+            row_bg  = "#fafaf8" if idx % 2 == 0 else "#ffffff"
+            rows_html.append(f"""<tr style="background:{row_bg}">
+                <td>
+                  <span class="stock-link" data-key="{row_key}">{stock}</span>
+                </td>
+                <td><span style="color:#9b9a94;font-size:10px">{univ}</span></td>
+                <td>{fmt(row.get('Open'))}</td>
+                <td>{fmt(row.get('High'))}</td>
+                <td>{fmt(row.get('Low'))}</td>
+                <td>{fmt(row.get('Close'))}</td>
+                <td>{fmt(row.get('Prev_Close'))}</td>
+                <td>{ret_class(row.get('Returns'))}</td>
+                <td>{fmt(row.get('Volume'), 0)}</td>
+                <td>{fmt(row.get('RSI_14'))}</td>
+                <td>{fmt(row.get('MFI_14'))}</td>
+                <td>{signal_badge(row.get('Supertrend_Signal', ''))}</td>
+            </tr>""")
 
-            try:
-                rv = float(ret_v)
-                ret_color = "#008a58" if rv > 0 else ("#c24141" if rv < 0 else "#5a5950")
-                ret_display = f"{rv:+.2f}%"
-            except:
-                ret_color   = "#5a5950"
-                ret_display = "—"
+        table_html = f"""
+        <div class="tbl-wrap">
+        <table class="screener-table">
+          <thead><tr>
+            <th>Stock</th><th>Univ</th>
+            <th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Prev Close</th>
+            <th>Return%</th><th>Volume</th><th>RSI</th><th>MFI</th><th>Signal</th>
+          </tr></thead>
+          <tbody>{"".join(rows_html)}</tbody>
+        </table>
+        </div>
+        """
+        # Styles that match the main app (duplicated here for the iframe context)
+        table_styles = """
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap');
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { background: transparent; font-family: 'IBM Plex Mono', monospace; }
+          .tbl-wrap {
+            overflow-x: auto; overflow-y: auto; max-height: 72vh;
+            background: #ffffff; border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 18px;
+          }
+          .screener-table { width: 100%; border-collapse: collapse; min-width: 1200px; font-size: 12px; }
+          .screener-table th {
+            position: sticky; top: 0; z-index: 5; background: #ffffff;
+            color: #9a9990; text-transform: uppercase; letter-spacing: 0.05em;
+            font-size: 10px; font-weight: 600; padding: 12px; text-align: left;
+            border-bottom: 1px solid rgba(0,0,0,0.08); white-space: nowrap;
+          }
+          .screener-table td { padding: 12px; border-bottom: 1px solid rgba(0,0,0,0.06); white-space: nowrap; }
+          .screener-table tr:last-child td { border-bottom: none; }
+          .screener-table tr:hover td { background: #eeede8; }
+          .stock-link {
+            font-weight: 600; cursor: pointer; color: #1a1a14;
+            text-decoration: underline; text-decoration-color: rgba(90,138,0,0.35);
+            text-underline-offset: 3px; transition: color 0.15s;
+          }
+          .stock-link:hover { color: #5a8a00; }
+          .up   { color: #008a58; font-weight: 600; }
+          .dn   { color: #c24141; font-weight: 600; }
+          .neu  { color: #5a5950; }
+          .badge-buy  {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 4px 10px; border-radius: 999px;
+            border: 1px solid rgba(0,138,88,0.18); background: rgba(0,138,88,0.10);
+            color: #008a58; font-size: 10px; font-weight: 700; text-transform: uppercase;
+          }
+          .badge-sell {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 4px 10px; border-radius: 999px;
+            border: 1px solid rgba(194,65,65,0.18); background: rgba(194,65,65,0.10);
+            color: #c24141; font-size: 10px; font-weight: 700; text-transform: uppercase;
+          }
+        </style>
+        """
+        table_script = """
+        <script>
+          document.querySelectorAll('.stock-link').forEach(function(el) {
+            el.addEventListener('click', function() {
+              const key = el.getAttribute('data-key');
+              // postMessage to the Streamlit parent frame
+              window.parent.postMessage({ type: 'stock_click', key: key }, '*');
+            });
+          });
+        </script>
+        """
 
-            sig_color = "#008a58" if signal_v == "BUY" else "#c24141"
-            sig_bg    = "rgba(0,138,88,0.10)" if signal_v == "BUY" else "rgba(194,65,65,0.10)"
+        import streamlit.components.v1 as components
+        components.html(table_styles + table_html + table_script, height=600, scrolling=False)
 
-            row_bg = "#fafaf8" if idx % 2 == 0 else "#ffffff"
+        # ── Receive postMessage via a second components.html listener ─────
+        # This component receives the message and sets a query param to trigger rerun
+        components.html("""
+        <script>
+          window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'stock_click') {
+              // Set query param on the parent Streamlit page URL and reload
+              const url = new URL(window.parent.location.href);
+              url.searchParams.set('clicked_stock', e.data.key);
+              window.parent.location.replace(url.toString());
+            }
+          });
+        </script>
+        """, height=0)
 
-            rcols = st.columns([1.8, 0.8, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 1.5, 1.0, 1.0, 1.1])
+        # ── Pick up query param set by the postMessage listener ──────────
+        clicked = st.query_params.get("clicked_stock", None)
+        if clicked and clicked != st.session_state.clicked_stock_key:
+            st.session_state.clicked_stock_key = clicked
 
-            cell_style = f"padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:13px;"
-
-            # Stock name as a button
-            with rcols[0]:
-                if st.button(
-                    stock,
-                    key=f"stock_btn_{idx}_{stock}_{univ}",
-                    use_container_width=True,
-                ):
-                    show_stock_detail(row)
-
-            # Remaining cells as markdown
-            rcols[1].markdown(
-                f"<div style='{cell_style}color:#9a9990;font-size:11px'>{univ}</div>",
-                unsafe_allow_html=True)
-            for rc, val, dec in [
-                (rcols[2],  row.get('Open'),      2),
-                (rcols[3],  row.get('High'),       2),
-                (rcols[4],  row.get('Low'),        2),
-                (rcols[5],  row.get('Close'),      2),
-                (rcols[6],  row.get('Prev_Close'), 2),
-            ]:
-                rc.markdown(
-                    f"<div style='{cell_style}'>{fmt(val, dec)}</div>",
-                    unsafe_allow_html=True)
-
-            rcols[7].markdown(
-                f"<div style='{cell_style}font-weight:600;color:{ret_color}'>{ret_display}</div>",
-                unsafe_allow_html=True)
-            rcols[8].markdown(
-                f"<div style='{cell_style}'>{fmt(row.get('Volume'), 0)}</div>",
-                unsafe_allow_html=True)
-            rcols[9].markdown(
-                f"<div style='{cell_style}'>{fmt(row.get('RSI_14'))}</div>",
-                unsafe_allow_html=True)
-            rcols[10].markdown(
-                f"<div style='{cell_style}'>{fmt(row.get('MFI_14'))}</div>",
-                unsafe_allow_html=True)
-            rcols[11].markdown(
-                f"<div style='{cell_style}'>"
-                f"<span style='font-size:10px;font-weight:700;padding:3px 9px;"
-                f"border-radius:999px;color:{sig_color};background:{sig_bg};"
-                f"border:1px solid {sig_color}33'>{signal_v}</span></div>",
-                unsafe_allow_html=True)
+        # ── Open dialog if a stock was clicked ────────────────────────────
+        if st.session_state.clicked_stock_key:
+            key   = st.session_state.clicked_stock_key
+            parts = key.split("||")
+            if len(parts) == 2:
+                ticker, universe = parts[0], parts[1]
+                match = filtered[
+                    (filtered['Stock'] == ticker) &
+                    (filtered['Universe'] == universe)
+                ]
+                if match.empty:
+                    match = df[
+                        (df['Stock'] == ticker) &
+                        (df['Universe'] == universe)
+                    ]
+                if not match.empty:
+                    # Clear so dialog doesn't re-open on next rerun
+                    st.session_state.clicked_stock_key = None
+                    st.query_params.pop("clicked_stock", None)
+                    show_stock_detail(match.iloc[0])
 
         st.caption(f"{len(filtered)} stocks · {st.session_state.logic} logic · sorted by {sort_by}")
 
