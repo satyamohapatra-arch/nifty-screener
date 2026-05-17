@@ -874,7 +874,146 @@ if data_ok and not df.empty:
 
     st.divider()
 
-    # Results table
+    # ── STOCK DETAIL POPUP ────────────────────────────────────────────────────
+    @st.dialog("Stock Details", width="large")
+    def show_stock_detail(row):
+        stock_name = str(row.get('Stock', '')).replace('.NS', '')
+        univ_full  = "NIFTY 100" if str(row.get('Universe','')) == "NIFTY100" else "LargeMidCap 250"
+        signal     = str(row.get('Supertrend_Signal', '')).upper()
+        ret_val    = row.get('Returns', None)
+
+        # Header
+        badge_color = "#008a58" if signal == "BUY" else "#c24141"
+        badge_bg    = "rgba(0,138,88,0.10)" if signal == "BUY" else "rgba(194,65,65,0.10)"
+        try:
+            ret_str   = f"{float(ret_val):+.2f}%"
+            ret_color = "#008a58" if float(ret_val) > 0 else ("#c24141" if float(ret_val) < 0 else "#5a5950")
+        except:
+            ret_str   = "—"
+            ret_color = "#5a5950"
+
+        st.markdown(f"""
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+            <div style="font-family:'Syne',sans-serif;font-size:1.8rem;font-weight:700;letter-spacing:-0.03em;">
+                {stock_name}
+            </div>
+            <div style="font-size:11px;color:#9a9990;background:#eeede8;padding:4px 10px;
+                        border-radius:999px;font-weight:600;">{univ_full}</div>
+            <div style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;
+                        color:{badge_color};background:{badge_bg};border:1px solid {badge_color}33;">
+                {signal}
+            </div>
+            <div style="font-size:1.1rem;font-weight:700;color:{ret_color};margin-left:auto;">
+                {ret_str}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        def fmt(val, decimals=2):
+            if pd.isna(val): return "—"
+            try:    return f"{float(val):,.{decimals}f}"
+            except: return str(val)
+
+        # Group columns into sections for clean block layout
+        SECTIONS = {
+            "📊 Price": [
+                ("Date",       "Date",       0),
+                ("Open",       "Open",       2),
+                ("High",       "High",       2),
+                ("Low",        "Low",        2),
+                ("Close",      "Close",      2),
+                ("Prev Close", "Prev_Close", 2),
+                ("Volume",     "Volume",     0),
+            ],
+            "📈 Moving Averages": [
+                ("SMA 20",   "SMA_20",   2),
+                ("SMA 50",   "SMA_50",   2),
+                ("SMA 100",  "SMA_100",  2),
+                ("SMA 200",  "SMA_200",  2),
+                ("EMA 10",   "EMA_10",   2),
+                ("EMA 13",   "EMA_13",   2),
+                ("EMA 20",   "EMA_20",   2),
+                ("EMA 50",   "EMA_50",   2),
+                ("EMA 200",  "EMA_200",  2),
+            ],
+            "🔬 Oscillators": [
+                ("RSI 14",       "RSI_14",      2),
+                ("MACD Line",    "MACD_line",   4),
+                ("MACD Signal",  "MACD_signal", 4),
+                ("MACD Hist",    "MACD_hist",   4),
+                ("CCI 20",       "CCI_20",      2),
+                ("MFI 14",       "MFI_14",      2),
+            ],
+            "🚦 Trend": [
+                ("Supertrend",        "Supertrend",        2),
+                ("Supertrend Signal", "Supertrend_Signal", 0),
+            ],
+        }
+
+        for section_title, fields in SECTIONS.items():
+            # Only render section if at least one field exists in the row
+            available = [(lbl, col, dec) for lbl, col, dec in fields if col in row.index]
+            if not available:
+                continue
+
+            st.markdown(f"**{section_title}**")
+            cols_per_row = 4
+            for chunk_start in range(0, len(available), cols_per_row):
+                chunk = available[chunk_start:chunk_start + cols_per_row]
+                st_cols = st.columns(cols_per_row)
+                for i, (lbl, col, dec) in enumerate(chunk):
+                    raw = row.get(col, None)
+                    # Special rendering for signal and returns
+                    if col == "Supertrend_Signal":
+                        display_val = str(raw).upper() if pd.notna(raw) else "—"
+                        color = "#008a58" if display_val == "BUY" else "#c24141"
+                        st_cols[i].markdown(
+                            f"<div style='font-size:10px;color:#9a9990;text-transform:uppercase;"
+                            f"letter-spacing:0.05em;margin-bottom:2px'>{lbl}</div>"
+                            f"<div style='font-size:15px;font-weight:700;color:{color}'>{display_val}</div>",
+                            unsafe_allow_html=True
+                        )
+                    elif col == "Returns":
+                        try:
+                            v = float(raw)
+                            color = "#008a58" if v > 0 else ("#c24141" if v < 0 else "#5a5950")
+                            display_val = f"{v:+.2f}%"
+                        except:
+                            color = "#5a5950"
+                            display_val = "—"
+                        st_cols[i].markdown(
+                            f"<div style='font-size:10px;color:#9a9990;text-transform:uppercase;"
+                            f"letter-spacing:0.05em;margin-bottom:2px'>{lbl}</div>"
+                            f"<div style='font-size:15px;font-weight:700;color:{color}'>{display_val}</div>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        display_val = fmt(raw, dec)
+                        st_cols[i].markdown(
+                            f"<div style='font-size:10px;color:#9a9990;text-transform:uppercase;"
+                            f"letter-spacing:0.05em;margin-bottom:2px'>{lbl}</div>"
+                            f"<div style='font-size:15px;font-weight:600;color:#1a1a14'>{display_val}</div>",
+                            unsafe_allow_html=True
+                        )
+            st.divider()
+
+        # Any remaining columns not covered by sections
+        covered = {col for fields in SECTIONS.values() for _, col, _ in fields}
+        extra   = [(c, c) for c in row.index if c not in covered and c not in ('Stock','Universe')]
+        if extra:
+            st.markdown("**📋 Other**")
+            st_cols = st.columns(4)
+            for i, (lbl, col) in enumerate(extra):
+                raw = row.get(col, None)
+                st_cols[i % 4].markdown(
+                    f"<div style='font-size:10px;color:#9a9990;text-transform:uppercase;"
+                    f"letter-spacing:0.05em;margin-bottom:2px'>{lbl}</div>"
+                    f"<div style='font-size:14px;font-weight:600;color:#1a1a14'>"
+                    f"{fmt(raw)}</div>",
+                    unsafe_allow_html=True
+                )
+
+    # ── RESULTS TABLE ─────────────────────────────────────────────────────────
     if filtered.empty:
         st.info("∅ No stocks match active filters. Relax a threshold or switch to OR logic.")
     else:
@@ -883,7 +1022,7 @@ if data_ok and not df.empty:
             try: return f"{float(val):.{decimals}f}"
             except: return str(val)
 
-        def ret_class(val):
+        def ret_html(val):
             try:
                 v = float(val)
                 cls = "up" if v > 0 else ("dn" if v < 0 else "neu")
@@ -897,39 +1036,85 @@ if data_ok and not df.empty:
             if v == "SELL": return '<span class="badge-sell">SELL</span>'
             return v
 
-        rows = []
-        display_cols = ['Stock','Universe','Open','High','Low','Close','Prev_Close','Returns','Volume','RSI_14','MFI_14','Supertrend_Signal']
-        for _, row in filtered.iterrows():
-            stock = str(row.get('Stock','')).replace('.NS','')
-            univ  = "N100" if str(row.get('Universe',''))=="NIFTY100" else "LMC"
-            rows.append(f"""<tr>
-                <td><strong>{stock}</strong></td>
-                <td><span style="color:#9b9a94;font-size:10px">{univ}</span></td>
-                <td>{fmt(row.get('Open'))}</td>
-                <td>{fmt(row.get('High'))}</td>
-                <td>{fmt(row.get('Low'))}</td>
-                <td>{fmt(row.get('Close'))}</td>
-                <td>{fmt(row.get('Prev_Close'))}</td>
-                <td>{ret_class(row.get('Returns'))}</td>
-                <td>{fmt(row.get('Volume'),0)}</td>
-                <td>{fmt(row.get('RSI_14'))}</td>
-                <td>{fmt(row.get('MFI_14'))}</td>
-                <td>{signal_badge(row.get('Supertrend_Signal',''))}</td>
-            </tr>""")
+        # ── Column headers ─────────────────────────────────────────────────
+        hcols = st.columns([1.8, 0.8, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 1.5, 1.0, 1.0, 1.1])
+        for hc, label in zip(hcols, [
+            "STOCK","UNIV","OPEN","HIGH","LOW","CLOSE","PREV CLOSE","RETURN%","VOLUME","RSI","MFI","SIGNAL"
+        ]):
+            hc.markdown(
+                f"<div style='font-size:10px;font-weight:600;color:#9a9990;"
+                f"text-transform:uppercase;letter-spacing:0.05em;padding:6px 0 4px 0;"
+                f"border-bottom:1px solid rgba(0,0,0,0.08);'>{label}</div>",
+                unsafe_allow_html=True
+            )
 
-        table_html = f"""
-        <div class="tbl-wrap">
-        <table class="screener-table">
-          <thead><tr>
-            <th>Stock</th><th>Univ</th>
-            <th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Prev Close</th>
-            <th>Return%</th><th>Volume</th><th>RSI</th><th>MFI</th><th>Signal</th>
-          </tr></thead>
-          <tbody>{"".join(rows)}</tbody>
-        </table>
-        </div>
-        """
-        st.markdown(table_html, unsafe_allow_html=True)
+        # ── Rows ───────────────────────────────────────────────────────────
+        for idx, (_, row) in enumerate(filtered.iterrows()):
+            stock     = str(row.get('Stock', '')).replace('.NS', '')
+            univ      = "N100" if str(row.get('Universe', '')) == "NIFTY100" else "LMC"
+            ret_v     = row.get('Returns', None)
+            signal_v  = str(row.get('Supertrend_Signal', '')).upper()
+
+            try:
+                rv = float(ret_v)
+                ret_color = "#008a58" if rv > 0 else ("#c24141" if rv < 0 else "#5a5950")
+                ret_display = f"{rv:+.2f}%"
+            except:
+                ret_color   = "#5a5950"
+                ret_display = "—"
+
+            sig_color = "#008a58" if signal_v == "BUY" else "#c24141"
+            sig_bg    = "rgba(0,138,88,0.10)" if signal_v == "BUY" else "rgba(194,65,65,0.10)"
+
+            row_bg = "#fafaf8" if idx % 2 == 0 else "#ffffff"
+
+            rcols = st.columns([1.8, 0.8, 1.2, 1.2, 1.2, 1.2, 1.2, 1.1, 1.5, 1.0, 1.0, 1.1])
+
+            cell_style = f"padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.05);font-size:13px;"
+
+            # Stock name as a button
+            with rcols[0]:
+                if st.button(
+                    stock,
+                    key=f"stock_btn_{idx}_{stock}_{univ}",
+                    use_container_width=True,
+                ):
+                    show_stock_detail(row)
+
+            # Remaining cells as markdown
+            rcols[1].markdown(
+                f"<div style='{cell_style}color:#9a9990;font-size:11px'>{univ}</div>",
+                unsafe_allow_html=True)
+            for rc, val, dec in [
+                (rcols[2],  row.get('Open'),      2),
+                (rcols[3],  row.get('High'),       2),
+                (rcols[4],  row.get('Low'),        2),
+                (rcols[5],  row.get('Close'),      2),
+                (rcols[6],  row.get('Prev_Close'), 2),
+            ]:
+                rc.markdown(
+                    f"<div style='{cell_style}'>{fmt(val, dec)}</div>",
+                    unsafe_allow_html=True)
+
+            rcols[7].markdown(
+                f"<div style='{cell_style}font-weight:600;color:{ret_color}'>{ret_display}</div>",
+                unsafe_allow_html=True)
+            rcols[8].markdown(
+                f"<div style='{cell_style}'>{fmt(row.get('Volume'), 0)}</div>",
+                unsafe_allow_html=True)
+            rcols[9].markdown(
+                f"<div style='{cell_style}'>{fmt(row.get('RSI_14'))}</div>",
+                unsafe_allow_html=True)
+            rcols[10].markdown(
+                f"<div style='{cell_style}'>{fmt(row.get('MFI_14'))}</div>",
+                unsafe_allow_html=True)
+            rcols[11].markdown(
+                f"<div style='{cell_style}'>"
+                f"<span style='font-size:10px;font-weight:700;padding:3px 9px;"
+                f"border-radius:999px;color:{sig_color};background:{sig_bg};"
+                f"border:1px solid {sig_color}33'>{signal_v}</span></div>",
+                unsafe_allow_html=True)
+
         st.caption(f"{len(filtered)} stocks · {st.session_state.logic} logic · sorted by {sort_by}")
 
         # CSV download
