@@ -110,13 +110,79 @@ def last_trading_day():
         day -= timedelta(days=1)
     return day.strftime('%Y-%m-%d')
 
+# ── YFINANCE DOWNLOAD HELPER ──────────────────────────────────────────────────
+
+def _download_single(stock, start_date, fetch_end):
+    """
+    Download OHLCV for a single ticker and return a clean flat DataFrame
+    with columns [Date, Open, High, Low, Close, Volume].
+
+    Handles both the old yfinance flat-column API and the new MultiIndex API
+    introduced in yfinance ≥ 0.2.x.
+    """
+    df = yf.download(
+        stock,
+        start=start_date,
+        end=fetch_end,
+        interval="1d",
+        auto_adjust=False,
+        progress=False,
+        group_by="column",   # ask for flat columns; yf may still return MultiIndex
+    )
+
+    if df is None or df.empty:
+        return None
+
+    # ── Flatten MultiIndex columns ────────────────────────────────────────────
+    if isinstance(df.columns, pd.MultiIndex):
+        # New yfinance: columns look like ('Close', 'RELIANCE.NS'), etc.
+        # Keep only level-0 names (price field), drop the ticker level.
+        # If a ticker level exists with our stock symbol, use xs(); otherwise droplevel.
+        level1_vals = df.columns.get_level_values(1).unique().tolist()
+        if stock in level1_vals:
+            df = df.xs(stock, axis=1, level=1)
+        else:
+            df = df.droplevel(1, axis=1)
+
+        # After droplevel/xs there can be duplicate column names — keep first
+        df = df.loc[:, ~df.columns.duplicated()]
+
+    # ── Ensure Date is a plain column, not the index ───────────────────────────
+    df = df.reset_index()
+
+    # ── Normalise column names (yfinance occasionally uses mixed case) ─────────
+    df.columns = [
+        "Date" if str(c).lower() in ("date", "datetime") else str(c).strip().capitalize()
+        for c in df.columns
+    ]
+
+    # Capitalise OHLCV variants like "open" → "Open", "Adj close" → ignore
+    rename_map = {}
+    for c in df.columns:
+        cl = c.lower()
+        if cl == "open":   rename_map[c] = "Open"
+        elif cl == "high": rename_map[c] = "High"
+        elif cl == "low":  rename_map[c] = "Low"
+        elif cl == "close":rename_map[c] = "Close"
+        elif cl == "volume":rename_map[c]= "Volume"
+    df = df.rename(columns=rename_map)
+
+    required = ["Date", "Open", "High", "Low", "Close", "Volume"]
+    missing  = [c for c in required if c not in df.columns]
+    if missing:
+        raise KeyError(f"Missing columns after normalisation: {missing}. Got: {df.columns.tolist()}")
+
+    df = df[required].copy()
+    df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None)  # strip tz if any
+    return df
+
 # ── DOWNLOAD ──────────────────────────────────────────────────────────────────
 
 def download_universe(symbols_url, universe_name, log=print):
-    master_path = f"master_data_{universe_name}.csv"  # separate file per universe
-    stocks    = [s + ".NS" for s in pd.read_csv(symbols_url)["Symbol"].tolist()]
-    END_DATE  = last_trading_day()
-    FETCH_END = (datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+    master_path = f"master_data_{universe_name}.csv"
+    stocks      = [s + ".NS" for s in pd.read_csv(symbols_url)["Symbol"].tolist()]
+    END_DATE    = last_trading_day()
+    FETCH_END   = (datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
 
     if os.path.exists(master_path):
         existing = pd.read_csv(master_path)
@@ -140,14 +206,10 @@ def download_universe(symbols_url, universe_name, log=print):
     all_data = []
     for stock in stocks:
         try:
-            df = yf.download(stock, start=start_date, end=FETCH_END,
-                             interval="1d", auto_adjust=False, progress=False)
-            if df.empty:
+            df = _download_single(stock, start_date, FETCH_END)
+            if df is None or df.empty:
                 log(f"Empty data {stock} — skipped")
                 continue
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            df = df.reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
             df["Stock"]    = stock
             df["Universe"] = universe_name
             all_data.append(df)
@@ -508,7 +570,18 @@ def run(log=print):
             u_df['Date'] = pd.to_datetime(u_df['Date'])
             all_frames.append(u_df)
 
-    df = pd.concat(all_frames, ignore_index=True) if all_frames else pd.DataFrame()
+    if not all_frames:
+        log("No data downloaded — aborting.")
+        return pd.DataFrame()
+
+    df = pd.concat(all_frames, ignore_index=True)
+
+    # Guard: only dropna if these columns actually exist
+    for col in ['Stock', 'Universe']:
+        if col not in df.columns:
+            log(f"WARNING: column '{col}' missing from master data — check download step.")
+            return pd.DataFrame()
+
     df = df.dropna(subset=['Stock', 'Universe'])
     log(f"Master: {len(df):,} rows | {df['Stock'].nunique()} stocks | latest: {df['Date'].max().date()}")
 
@@ -521,6 +594,10 @@ def run(log=print):
                 all_results.append(calculate_indicators(grp.copy()))
             except Exception as e:
                 log(f"Skipping {stock}: {e}")
+
+    if not all_results:
+        log("No indicator results — aborting.")
+        return pd.DataFrame()
 
     combined = pd.concat(all_results, ignore_index=True)
 
