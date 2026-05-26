@@ -26,50 +26,34 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# ── COLUMNS (68 total, exact match with Colab) ────────────────────────────────
+# ── COLUMNS (68 total) ────────────────────────────────────────────────────────
 
 COLS = [
-    # Base
     'Date', 'Stock', 'Universe',
     'Open', 'High', 'Low', 'Close', 'Volume',
-
-    # Trend (19)
     'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
     'EMA_10', 'EMA_13', 'EMA_20', 'EMA_50', 'EMA_200',
     'HMA_20', 'KAMA_20',
     'Ichimoku_Tenkan', 'Ichimoku_Kijun',
     'Supertrend', 'Supertrend_Signal',
-    'Parabolic_SAR',
-    'ADX_14',
+    'Parabolic_SAR', 'ADX_14',
     'Donchian_High', 'Donchian_Low',
-
-    # Momentum (11)
     'RSI_14', 'MACD_line', 'MACD_signal', 'MACD_hist',
     'Stoch_K', 'Stoch_D', 'Stoch_RSI',
     'CCI_20', 'Williams_R', 'ROC_12',
     'Ultimate_Oscillator',
-
-    # Volatility (7)
     'ATR_14',
     'BB_Upper', 'BB_Middle', 'BB_Lower',
     'Keltner_Upper', 'Keltner_Lower',
-
-    # Volume (4)
     'OBV', 'VWAP', 'MFI_14',
     'Pivot_Point',
-
-    # Support / Resistance (2)
     '52W_High', '52W_Low',
-
-    # Rare / Advanced (12)
     'Fisher_Transform', 'Schaff_Trend_Cycle', 'FRAMA',
     'Coppock_Curve', 'Mass_Index',
     'Vortex_Pos', 'Vortex_Neg',
     'CMO', 'TRIX',
     'Elder_Bull_Power', 'Elder_Bear_Power',
     'RVI',
-
-    # Derived features (6)
     'Prev_Close', 'Gap', 'Returns', 'Log_Returns',
     'Spread', 'Volatility',
 ]
@@ -77,10 +61,7 @@ COLS = [
 # ── GOOGLE AUTH ───────────────────────────────────────────────────────────────
 
 def get_gspread_client():
-    # 1. Environment variable (GitHub Actions)
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-
-    # 2. Streamlit secrets (Streamlit Cloud)
     if not creds_json:
         try:
             import streamlit as st
@@ -88,14 +69,11 @@ def get_gspread_client():
             creds_json = json.dumps(dict(val)) if hasattr(val, 'keys') else val
         except Exception:
             pass
-
-    # 3. Local service_account.json fallback
     if creds_json:
         info = json.loads(creds_json) if isinstance(creds_json, str) else dict(creds_json)
     else:
         with open("service_account.json") as f:
             info = json.load(f)
-
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
@@ -110,73 +88,7 @@ def last_trading_day():
         day -= timedelta(days=1)
     return day.strftime('%Y-%m-%d')
 
-# ── YFINANCE DOWNLOAD HELPER ──────────────────────────────────────────────────
-
-def _download_single(stock, start_date, fetch_end):
-    """
-    Download OHLCV for a single ticker and return a clean flat DataFrame
-    with columns [Date, Open, High, Low, Close, Volume].
-
-    Handles both the old yfinance flat-column API and the new MultiIndex API
-    introduced in yfinance ≥ 0.2.x.
-    """
-    df = yf.download(
-        stock,
-        start=start_date,
-        end=fetch_end,
-        interval="1d",
-        auto_adjust=False,
-        progress=False,
-        group_by="column",   # ask for flat columns; yf may still return MultiIndex
-    )
-
-    if df is None or df.empty:
-        return None
-
-    # ── Flatten MultiIndex columns ────────────────────────────────────────────
-    if isinstance(df.columns, pd.MultiIndex):
-        # New yfinance: columns look like ('Close', 'RELIANCE.NS'), etc.
-        # Keep only level-0 names (price field), drop the ticker level.
-        # If a ticker level exists with our stock symbol, use xs(); otherwise droplevel.
-        level1_vals = df.columns.get_level_values(1).unique().tolist()
-        if stock in level1_vals:
-            df = df.xs(stock, axis=1, level=1)
-        else:
-            df = df.droplevel(1, axis=1)
-
-        # After droplevel/xs there can be duplicate column names — keep first
-        df = df.loc[:, ~df.columns.duplicated()]
-
-    # ── Ensure Date is a plain column, not the index ───────────────────────────
-    df = df.reset_index()
-
-    # ── Normalise column names (yfinance occasionally uses mixed case) ─────────
-    df.columns = [
-        "Date" if str(c).lower() in ("date", "datetime") else str(c).strip().capitalize()
-        for c in df.columns
-    ]
-
-    # Capitalise OHLCV variants like "open" → "Open", "Adj close" → ignore
-    rename_map = {}
-    for c in df.columns:
-        cl = c.lower()
-        if cl == "open":   rename_map[c] = "Open"
-        elif cl == "high": rename_map[c] = "High"
-        elif cl == "low":  rename_map[c] = "Low"
-        elif cl == "close":rename_map[c] = "Close"
-        elif cl == "volume":rename_map[c]= "Volume"
-    df = df.rename(columns=rename_map)
-
-    required = ["Date", "Open", "High", "Low", "Close", "Volume"]
-    missing  = [c for c in required if c not in df.columns]
-    if missing:
-        raise KeyError(f"Missing columns after normalisation: {missing}. Got: {df.columns.tolist()}")
-
-    df = df[required].copy()
-    df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None)  # strip tz if any
-    return df
-
-# ── DOWNLOAD ──────────────────────────────────────────────────────────────────
+# ── BULK DOWNLOAD ─────────────────────────────────────────────────────────────
 
 def download_universe(symbols_url, universe_name, log=print):
     master_path = f"master_data_{universe_name}.csv"
@@ -184,64 +96,139 @@ def download_universe(symbols_url, universe_name, log=print):
     END_DATE    = last_trading_day()
     FETCH_END   = (datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
 
+    log(f"[{universe_name}] {len(stocks)} stocks | end={END_DATE}")
+
     if os.path.exists(master_path):
         existing = pd.read_csv(master_path)
         existing['Date'] = pd.to_datetime(existing['Date'])
         last_date = existing['Date'].max()
         if pd.isna(last_date):
             start_date = "2021-01-01"
-            log(f"{universe_name} — no existing data, full download")
+            log(f"[{universe_name}] No valid dates in master — full download")
         else:
             start_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
-            log(f"{universe_name} — last: {last_date.date()}, fetch from: {start_date}")
+            log(f"[{universe_name}] Last date in master: {last_date.date()} — fetching from {start_date}")
     else:
         start_date = "2021-01-01"
         existing   = None
-        log(f"No master found. Full download from {start_date}")
+        log(f"[{universe_name}] No master CSV found — full download from {start_date}")
 
     if start_date > END_DATE:
-        log(f"{universe_name} already up to date.")
+        log(f"[{universe_name}] Already up to date. Skipping download.")
         return existing if existing is not None else pd.DataFrame()
 
+    # ── Bulk download all tickers in one call ─────────────────────────────────
+    log(f"[{universe_name}] Bulk downloading {len(stocks)} tickers from {start_date} to {FETCH_END}...")
+    try:
+        raw = yf.download(
+            stocks,
+            start=start_date,
+            end=FETCH_END,
+            interval="1d",
+            auto_adjust=False,
+            progress=False,
+            group_by="ticker",
+            threads=True,
+        )
+    except Exception as e:
+        log(f"[{universe_name}] Bulk download exception: {e}")
+        raw = pd.DataFrame()
+
+    if raw is None or raw.empty:
+        log(f"[{universe_name}] Bulk download returned empty DataFrame — no data.")
+        return existing if existing is not None else pd.DataFrame()
+
+    log(f"[{universe_name}] Raw download shape: {raw.shape} | columns sample: {list(raw.columns[:6])}")
+
+    # ── Parse per-ticker ──────────────────────────────────────────────────────
     all_data = []
+    success  = 0
+    skipped  = 0
+
     for stock in stocks:
         try:
-            df = _download_single(stock, start_date, FETCH_END)
-            if df is None or df.empty:
-                log(f"Empty data {stock} — skipped")
-                continue
-            df["Stock"]    = stock
-            df["Universe"] = universe_name
-            all_data.append(df)
-        except Exception as e:
-            log(f"Error {stock}: {e}")
+            # MultiIndex: (ticker, field) when group_by='ticker'
+            if isinstance(raw.columns, pd.MultiIndex):
+                if stock not in raw.columns.get_level_values(0):
+                    log(f"  SKIP {stock}: not in bulk result")
+                    skipped += 1
+                    continue
+                df = raw[stock].copy()
+            else:
+                # Single ticker edge-case (shouldn't happen with list input)
+                df = raw.copy()
 
-    new_data = pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+            df = df.dropna(how='all')
+            if df.empty:
+                log(f"  SKIP {stock}: all-NaN rows")
+                skipped += 1
+                continue
+
+            df = df.reset_index()
+
+            # Normalise column names
+            rename_map = {}
+            for c in df.columns:
+                cl = str(c).lower().strip()
+                if cl in ('date', 'datetime'):   rename_map[c] = 'Date'
+                elif cl == 'open':               rename_map[c] = 'Open'
+                elif cl == 'high':               rename_map[c] = 'High'
+                elif cl == 'low':                rename_map[c] = 'Low'
+                elif cl == 'close':              rename_map[c] = 'Close'
+                elif cl == 'volume':             rename_map[c] = 'Volume'
+            df = df.rename(columns=rename_map)
+
+            required = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+            missing  = [c for c in required if c not in df.columns]
+            if missing:
+                log(f"  SKIP {stock}: missing {missing} — got {df.columns.tolist()}")
+                skipped += 1
+                continue
+
+            df = df[required].copy()
+            df['Date']     = pd.to_datetime(df['Date']).dt.tz_localize(None)
+            df['Stock']    = stock
+            df['Universe'] = universe_name
+            all_data.append(df)
+            success += 1
+
+        except Exception as e:
+            log(f"  ERROR {stock}: {e}")
+            skipped += 1
+
+    log(f"[{universe_name}] Parsed: {success} OK | {skipped} skipped")
+
+    if not all_data:
+        log(f"[{universe_name}] No usable data after parsing — aborting save.")
+        return existing if existing is not None else pd.DataFrame()
+
+    new_data = pd.concat(all_data, ignore_index=True)
+    log(f"[{universe_name}] New rows: {len(new_data):,}")
 
     if existing is not None and not new_data.empty:
         combined = pd.concat([existing, new_data], ignore_index=True)
         combined = combined.drop_duplicates(subset=['Date', 'Stock'])
         combined.to_csv(master_path, index=False)
+        log(f"[{universe_name}] Master updated: {len(combined):,} rows → {master_path}")
         return combined
 
     if not new_data.empty:
         new_data.to_csv(master_path, index=False)
+        log(f"[{universe_name}] Master saved: {len(new_data):,} rows → {master_path}")
     return new_data
 
-# ── INDICATORS (full 68-col suite, identical to Colab) ───────────────────────
+# ── INDICATORS ────────────────────────────────────────────────────────────────
 
 def calculate_indicators(data):
     data  = data.sort_values('Date').copy()
     n     = len(data)
     if n < 30:
-        return data  # too short for any indicator — return raw
+        return data
     close = data['Close']
     high  = data['High']
     low   = data['Low']
     vol   = data['Volume']
     open_ = data['Open']
-
-    # ── TREND ─────────────────────────────────────────────────────────────────
 
     # SMA
     for w in [20, 50, 100, 200]:
@@ -251,7 +238,6 @@ def calculate_indicators(data):
     for w in [10, 13, 20, 50, 200]:
         data[f'EMA_{w}'] = close.ewm(span=w, adjust=False).mean()
 
-    # WMA helper (used for HMA & Coppock)
     def wma(series, period):
         weights = np.arange(1, period + 1)
         return series.rolling(period).apply(
@@ -281,11 +267,11 @@ def calculate_indicators(data):
     data['Ichimoku_Tenkan'] = (high.rolling(9).max()  + low.rolling(9).min())  / 2
     data['Ichimoku_Kijun']  = (high.rolling(26).max() + low.rolling(26).min()) / 2
 
-    # Donchian Channel (20)
+    # Donchian
     data['Donchian_High'] = high.rolling(20).max()
     data['Donchian_Low']  = low.rolling(20).min()
 
-    # True Range / ATR_14
+    # ATR_14
     hl   = high - low
     hcp  = (high - close.shift()).abs()
     lcp  = (low  - close.shift()).abs()
@@ -305,15 +291,15 @@ def calculate_indicators(data):
 
     # Parabolic SAR
     af_start, af_step, af_max = 0.02, 0.02, 0.2
-    high_arr = high.values
-    low_arr  = low.values
-    sar      = np.zeros(n)
+    high_arr  = high.values
+    low_arr   = low.values
+    sar       = np.zeros(n)
     trend_arr = np.ones(n)
-    ep       = np.zeros(n)
-    af_arr   = np.zeros(n)
-    sar[0]   = low_arr[0]
-    ep[0]    = high_arr[0]
-    af_arr[0]= af_start
+    ep        = np.zeros(n)
+    af_arr    = np.zeros(n)
+    sar[0]    = low_arr[0]
+    ep[0]     = high_arr[0]
+    af_arr[0] = af_start
     for i in range(1, n):
         ps, pe, pa, pt = sar[i-1], ep[i-1], af_arr[i-1], trend_arr[i-1]
         if pt == 1:
@@ -351,8 +337,6 @@ def calculate_indicators(data):
             supertrend[i] = upper_band[i]; signal[i] = 'SELL'
     data['Supertrend']        = np.round(supertrend, 2)
     data['Supertrend_Signal'] = signal
-
-    # ── MOMENTUM ──────────────────────────────────────────────────────────────
 
     # RSI_14
     delta    = close.diff()
@@ -405,7 +389,7 @@ def calculate_indicators(data):
     avg28 = bp.rolling(28).sum() / (tr2.rolling(28).sum() + 1e-10)
     data['Ultimate_Oscillator'] = 100 * (4 * avg7 + 2 * avg14 + avg28) / 7
 
-    # CMO: Chande Momentum Oscillator
+    # CMO
     up_sum   = gain.rolling(14).sum()
     down_sum = loss.rolling(14).sum()
     data['CMO'] = 100 * (up_sum - down_sum) / (up_sum + down_sum + 1e-10)
@@ -416,21 +400,17 @@ def calculate_indicators(data):
     ema3 = ema2.ewm(span=15, adjust=False).mean()
     data['TRIX'] = ema3.pct_change() * 100
 
-    # ── VOLATILITY ────────────────────────────────────────────────────────────
-
-    # Bollinger Bands (20, 2)
+    # Bollinger Bands
     bb_mid = close.rolling(20).mean()
     bb_std = close.rolling(20).std()
     data['BB_Upper']  = bb_mid + 2 * bb_std
     data['BB_Middle'] = bb_mid
     data['BB_Lower']  = bb_mid - 2 * bb_std
 
-    # Keltner Channel (20, ATR*1.5)
+    # Keltner Channel
     kc_mid = close.ewm(span=20, adjust=False).mean()
     data['Keltner_Upper'] = kc_mid + 1.5 * data['ATR_14']
     data['Keltner_Lower'] = kc_mid - 1.5 * data['ATR_14']
-
-    # ── VOLUME ────────────────────────────────────────────────────────────────
 
     # OBV
     obv = np.zeros(n)
@@ -443,7 +423,7 @@ def calculate_indicators(data):
             obv[i] = obv[i - 1]
     data['OBV'] = obv
 
-    # VWAP (rolling 14-day approximation)
+    # VWAP (rolling 14-day)
     tp_vwap = (high + low + close) / 3
     data['VWAP'] = (tp_vwap * vol).rolling(14).sum() / (vol.rolling(14).sum() + 1e-10)
 
@@ -455,15 +435,12 @@ def calculate_indicators(data):
     mfr  = pmf.rolling(14).sum() / (nmf.rolling(14).sum() + 1e-10)
     data['MFI_14'] = 100 - (100 / (1 + mfr))
 
-    # Pivot Point (prior day H/L/C average)
+    # Pivot Point
     data['Pivot_Point'] = (high.shift(1) + low.shift(1) + close.shift(1)) / 3
 
-    # ── SUPPORT / RESISTANCE ──────────────────────────────────────────────────
-
+    # 52W High/Low
     data['52W_High'] = high.rolling(252).max()
     data['52W_Low']  = low.rolling(252).min()
-
-    # ── RARE / ADVANCED ───────────────────────────────────────────────────────
 
     # Fisher Transform
     median_price = (high + low) / 2
@@ -515,13 +492,13 @@ def calculate_indicators(data):
     ema9_ema = ema9_hl.ewm(span=9, adjust=False).mean()
     data['Mass_Index'] = (ema9_hl / (ema9_ema + 1e-10)).rolling(25).sum()
 
-    # Vortex Indicator
+    # Vortex
     vm_pos = (high - low.shift(1)).abs()
     vm_neg = (low  - high.shift(1)).abs()
     data['Vortex_Pos'] = vm_pos.rolling(14).sum() / (tr.rolling(14).sum() + 1e-10)
     data['Vortex_Neg'] = vm_neg.rolling(14).sum() / (tr.rolling(14).sum() + 1e-10)
 
-    # Elder Bull/Bear Power
+    # Elder
     data['Elder_Bull_Power'] = high - data['EMA_13']
     data['Elder_Bear_Power'] = low  - data['EMA_13']
 
@@ -532,8 +509,7 @@ def calculate_indicators(data):
     rvi_den = (hl_r + 2 * hl_r.shift(1) + 2 * hl_r.shift(2) + hl_r.shift(3)) / 6
     data['RVI'] = rvi_num.rolling(10).sum() / (rvi_den.rolling(10).sum() + 1e-10)
 
-    # ── DERIVED FEATURES ──────────────────────────────────────────────────────
-
+    # Derived
     data['Prev_Close']  = close.shift(1)
     data['Gap']         = open_ - close.shift(1)
     data['Returns']     = close.pct_change() * 100
@@ -546,21 +522,24 @@ def calculate_indicators(data):
 # ── RUN ───────────────────────────────────────────────────────────────────────
 
 def run(log=print):
-    # Remove old shared master file if it exists — prevents universe tag corruption
     if os.path.exists("master_data.csv"):
         os.remove("master_data.csv")
         log("Removed legacy master_data.csv")
-
-    log("Downloading NIFTY100...")
-    download_universe(NIFTY100_URL, "NIFTY100", log=log)
-
-    log("Downloading NIFTY_LARGEMIDCAP250...")
-    download_universe(LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250", log=log)
 
     universes = [
         (NIFTY100_URL,    "NIFTY100"),
         (LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250"),
     ]
+
+    for url, u_name in universes:
+        log(f"\n{'='*50}")
+        log(f"Downloading {u_name}...")
+        log(f"{'='*50}")
+        download_universe(url, u_name, log=log)
+
+    log(f"\n{'='*50}")
+    log("Loading master CSVs...")
+    log(f"{'='*50}")
 
     all_frames = []
     for _, u_name in universes:
@@ -568,35 +547,45 @@ def run(log=print):
         if os.path.exists(path):
             u_df = pd.read_csv(path)
             u_df['Date'] = pd.to_datetime(u_df['Date'])
+            log(f"  Loaded {path}: {len(u_df):,} rows")
             all_frames.append(u_df)
+        else:
+            log(f"  WARNING: {path} not found — universe will be missing")
 
     if not all_frames:
-        log("No data downloaded — aborting.")
+        log("FATAL: No master CSVs loaded. Aborting.")
         return pd.DataFrame()
 
     df = pd.concat(all_frames, ignore_index=True)
 
-    # Guard: only dropna if these columns actually exist
     for col in ['Stock', 'Universe']:
         if col not in df.columns:
-            log(f"WARNING: column '{col}' missing from master data — check download step.")
+            log(f"FATAL: column '{col}' missing. Aborting.")
             return pd.DataFrame()
 
     df = df.dropna(subset=['Stock', 'Universe'])
-    log(f"Master: {len(df):,} rows | {df['Stock'].nunique()} stocks | latest: {df['Date'].max().date()}")
+    log(f"Master total: {len(df):,} rows | {df['Stock'].nunique()} stocks | latest: {df['Date'].max().date()}")
+
+    log(f"\n{'='*50}")
+    log("Calculating indicators...")
+    log(f"{'='*50}")
 
     all_results = []
     for _, u_name in universes:
-        log(f"Calculating indicators for {u_name}...")
+        log(f"  [{u_name}] processing...")
         u_df = df[df['Universe'] == u_name].copy()
+        ok, skip = 0, 0
         for stock, grp in u_df.groupby('Stock', group_keys=False):
             try:
                 all_results.append(calculate_indicators(grp.copy()))
+                ok += 1
             except Exception as e:
-                log(f"Skipping {stock}: {e}")
+                log(f"    Skipping {stock}: {e}")
+                skip += 1
+        log(f"  [{u_name}] done: {ok} OK | {skip} skipped")
 
     if not all_results:
-        log("No indicator results — aborting.")
+        log("FATAL: No indicator results. Aborting.")
         return pd.DataFrame()
 
     combined = pd.concat(all_results, ignore_index=True)
@@ -610,11 +599,12 @@ def run(log=print):
     )
     latest['Date'] = pd.to_datetime(latest['Date']).dt.strftime('%Y-%m-%d')
 
-    log(f"Snapshot: {len(latest)} rows | {len(available_cols)} columns")
+    log(f"\nSnapshot: {len(latest)} rows | {len(available_cols)} columns")
     log(str(latest.groupby('Universe')['Stock'].nunique()))
 
-    # Push to Google Sheet
+    log(f"\n{'='*50}")
     log("Pushing to Google Sheet...")
+    log(f"{'='*50}")
     gc        = get_gspread_client()
     sh        = gc.open_by_key(SHEET_ID)
     worksheet = sh.get_worksheet(0)
