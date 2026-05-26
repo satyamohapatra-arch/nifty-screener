@@ -21,10 +21,28 @@ jobs:
           python-version: '3.11'
           cache: pip
 
+      - name: Restore master data cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            master_data_NIFTY100.csv
+            master_data_NIFTY_LARGEMIDCAP250.csv
+          key: master-data-${{ runner.os }}-${{ hashFiles('screener.py') }}
+          restore-keys: |
+            master-data-${{ runner.os }}-
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run screener
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python screener.py
+        run: python screener.py 2>&1 | tee screener_log.txt
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screener-log-${{ github.run_number }}
+          path: screener_log.txt
+          retention-days: 7
