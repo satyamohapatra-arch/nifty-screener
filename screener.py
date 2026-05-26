@@ -170,7 +170,7 @@ def download_universe(symbols_url, universe_name, log=print):
             rename_map = {}
             for c in df.columns:
                 cl = str(c).lower().strip()
-                if cl in ('date', 'datetime'):   rename_map[c] = 'Date'
+                if cl in ('date', 'datetime', 'index'):   rename_map[c] = 'Date'
                 elif cl == 'open':               rename_map[c] = 'Open'
                 elif cl == 'high':               rename_map[c] = 'High'
                 elif cl == 'low':                rename_map[c] = 'Low'
