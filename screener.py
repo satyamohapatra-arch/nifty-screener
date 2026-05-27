@@ -117,84 +117,98 @@ def download_universe(symbols_url, universe_name, log=print):
         log(f"[{universe_name}] Already up to date. Skipping download.")
         return existing if existing is not None else pd.DataFrame()
 
-    # ── Bulk download all tickers in one call ─────────────────────────────────
-    log(f"[{universe_name}] Bulk downloading {len(stocks)} tickers from {start_date} to {FETCH_END}...")
-    try:
-        raw = yf.download(
-            stocks,
-            start=start_date,
-            end=FETCH_END,
-            interval="1d",
-            auto_adjust=False,
-            progress=False,
-            group_by="ticker",
-            threads=True,
-        )
-    except Exception as e:
-        log(f"[{universe_name}] Bulk download exception: {e}")
-        raw = pd.DataFrame()
+    # ── Batch download: 10 tickers at a time for reliable full history ────────
+    BATCH_SIZE = 10
+    batches    = [stocks[i:i+BATCH_SIZE] for i in range(0, len(stocks), BATCH_SIZE)]
+    log(f"[{universe_name}] Downloading {len(stocks)} tickers in {len(batches)} batches of {BATCH_SIZE}...")
 
-    if raw is None or raw.empty:
-        log(f"[{universe_name}] Bulk download returned empty DataFrame — no data.")
-        return existing if existing is not None else pd.DataFrame()
-
-    log(f"[{universe_name}] Raw download shape: {raw.shape} | columns sample: {list(raw.columns[:6])}")
-
-    # ── Parse per-ticker ──────────────────────────────────────────────────────
     all_data = []
     success  = 0
     skipped  = 0
 
-    for stock in stocks:
+    for b_idx, batch in enumerate(batches):
         try:
-            # MultiIndex: (ticker, field) when group_by='ticker'
-            if isinstance(raw.columns, pd.MultiIndex):
-                if stock not in raw.columns.get_level_values(0):
-                    log(f"  SKIP {stock}: not in bulk result")
+            raw = yf.download(
+                batch,
+                start=start_date,
+                end=FETCH_END,
+                interval="1d",
+                auto_adjust=False,
+                progress=False,
+                group_by="ticker",
+                threads=True,
+            )
+        except Exception as e:
+            log(f"  Batch {b_idx+1} download exception: {e}")
+            skipped += len(batch)
+            continue
+
+        if raw is None or raw.empty:
+            log(f"  Batch {b_idx+1} returned empty — skipping")
+            skipped += len(batch)
+            continue
+
+        for stock in batch:
+            try:
+                # Extract per-ticker slice
+                if isinstance(raw.columns, pd.MultiIndex):
+                    lvl0 = raw.columns.get_level_values(0).unique().tolist()
+                    lvl1 = raw.columns.get_level_values(1).unique().tolist()
+
+                    # group_by='ticker' → level 0 = ticker, level 1 = field
+                    if stock in lvl0:
+                        df = raw[stock].copy()
+                    # single ticker in batch → level 0 = field, no ticker level
+                    elif len(batch) == 1:
+                        df = raw.droplevel(1, axis=1).copy()
+                        df = df.loc[:, ~df.columns.duplicated()]
+                    else:
+                        log(f"  SKIP {stock}: not found in batch result")
+                        skipped += 1
+                        continue
+                else:
+                    df = raw.copy()
+
+                # Drop rows where ALL price cols are NaN
+                df = df.dropna(subset=['Close'])
+                if df.empty:
+                    log(f"  SKIP {stock}: no Close data")
                     skipped += 1
                     continue
-                df = raw[stock].copy()
-            else:
-                # Single ticker edge-case (shouldn't happen with list input)
-                df = raw.copy()
 
-            df = df.dropna(how='all')
-            if df.empty:
-                log(f"  SKIP {stock}: all-NaN rows")
+                df = df.reset_index()
+
+                # Normalise column names — 'index' happens when yfinance index has no name
+                rename_map = {}
+                for c in df.columns:
+                    cl = str(c).lower().strip()
+                    if cl in ('date', 'datetime', 'index'):  rename_map[c] = 'Date'
+                    elif cl == 'open':                       rename_map[c] = 'Open'
+                    elif cl == 'high':                       rename_map[c] = 'High'
+                    elif cl == 'low':                        rename_map[c] = 'Low'
+                    elif cl == 'close':                      rename_map[c] = 'Close'
+                    elif cl == 'volume':                     rename_map[c] = 'Volume'
+                df = df.rename(columns=rename_map)
+
+                required = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+                missing  = [c for c in required if c not in df.columns]
+                if missing:
+                    log(f"  SKIP {stock}: missing {missing} — got {df.columns.tolist()}")
+                    skipped += 1
+                    continue
+
+                df = df[required].copy()
+                df['Date']     = pd.to_datetime(df['Date']).dt.tz_localize(None)
+                df['Stock']    = stock
+                df['Universe'] = universe_name
+                all_data.append(df)
+                success += 1
+
+            except Exception as e:
+                log(f"  ERROR {stock}: {e}")
                 skipped += 1
-                continue
 
-            df = df.reset_index()
-
-            # Normalise column names
-            rename_map = {}
-            for c in df.columns:
-                cl = str(c).lower().strip()
-                if cl in ('date', 'datetime', 'index'):   rename_map[c] = 'Date'
-                elif cl == 'open':               rename_map[c] = 'Open'
-                elif cl == 'high':               rename_map[c] = 'High'
-                elif cl == 'low':                rename_map[c] = 'Low'
-                elif cl == 'close':              rename_map[c] = 'Close'
-                elif cl == 'volume':             rename_map[c] = 'Volume'
-            df = df.rename(columns=rename_map)
-
-            required = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-            missing  = [c for c in required if c not in df.columns]
-            if missing:
-                log(f"  SKIP {stock}: missing {missing} — got {df.columns.tolist()}")
-                skipped += 1
-                continue
-
-            df = df[required].copy()
-            df['Date']     = pd.to_datetime(df['Date']).dt.tz_localize(None)
-            df['Stock']    = stock
-            df['Universe'] = universe_name
-            all_data.append(df)
-            success += 1
-
-        except Exception as e:
-            log(f"  ERROR {stock}: {e}")
-            skipped += 1
+        log(f"  Batch {b_idx+1}/{len(batches)} done | running total: {success} OK")
 
     log(f"[{universe_name}] Parsed: {success} OK | {skipped} skipped")
 
