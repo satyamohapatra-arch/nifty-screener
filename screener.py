@@ -540,6 +540,25 @@ def run(log=print):
         os.remove("master_data.csv")
         log("Removed legacy master_data.csv")
 
+    # Validate existing master CSVs — delete if any stock has < 200 rows
+    # (means a previous broken run saved incomplete data to cache)
+    for u_name in ["NIFTY100", "NIFTY_LARGEMIDCAP250"]:
+        path = f"master_data_{u_name}.csv"
+        if os.path.exists(path):
+            try:
+                check_df  = pd.read_csv(path, usecols=['Stock'])
+                min_rows  = check_df['Stock'].value_counts().min()
+                mean_rows = int(check_df['Stock'].value_counts().mean())
+                log(f"Validating {path}: min={min_rows} rows/stock, mean={mean_rows}")
+                if min_rows < 200:
+                    log(f"  INVALID — min rows {min_rows} < 200. Deleting for full re-download.")
+                    os.remove(path)
+                else:
+                    log(f"  OK")
+            except Exception as e:
+                log(f"  Could not validate {path}: {e} — deleting to be safe.")
+                os.remove(path)
+
     universes = [
         (NIFTY100_URL,    "NIFTY100"),
         (LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250"),
