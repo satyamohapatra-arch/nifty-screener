@@ -11,9 +11,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 import gspread_dataframe as gd
 from datetime import datetime
-import threading
 
 # ── PAGE CONFIG ───────────────────────────────────────────────────────────────
+
 st.set_page_config(
     page_title="Nifty Live Screener",
     page_icon="📈",
@@ -22,6 +22,7 @@ st.set_page_config(
 )
 
 # ── CONSTANTS ─────────────────────────────────────────────────────────────────
+
 SHEET_ID = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
 SCOPES   = [
     "https://spreadsheets.google.com/feeds",
@@ -31,70 +32,84 @@ SCOPES   = [
 # Flat indicator lookup: label → (col, vmin, vmax, vdefault)
 # vmin=None means text filter (BUY/SELL)
 ALL_INDICATORS = {
-    "Open":               ("Open",               0,    10000, 100),
-    "High":               ("High",               0,    10000, 100),
-    "Low":                ("Low",                0,    10000, 100),
-    "Close":              ("Close",              0,    10000, 100),
-    "Prev Close":         ("Prev_Close",         0,    10000, 100),
-    "Volume":             ("Volume",             0,    1e8,   500000),
-    "Supertrend Signal":  ("Supertrend_Signal",  None, None,  None),
-    "Supertrend":         ("Supertrend",         0,    10000, 100),
-    "Parabolic SAR":      ("Parabolic_SAR",      0,    10000, 100),
-    "SMA 20":             ("SMA_20",             0,    10000, 100),
-    "SMA 50":             ("SMA_50",             0,    10000, 100),
-    "SMA 100":            ("SMA_100",            0,    10000, 100),
-    "SMA 200":            ("SMA_200",            0,    10000, 100),
-    "EMA 10":             ("EMA_10",             0,    10000, 100),
-    "EMA 20":             ("EMA_20",             0,    10000, 100),
-    "EMA 50":             ("EMA_50",             0,    10000, 100),
-    "EMA 200":            ("EMA_200",            0,    10000, 100),
-    "HMA 20":             ("HMA_20",             0,    10000, 100),
-    "KAMA 20":            ("KAMA_20",            0,    10000, 100),
-    "FRAMA":              ("FRAMA",              0,    10000, 100),
-    "ADX 14":             ("ADX_14",             0,    100,   25),
-    "Ichimoku Tenkan":    ("Ichimoku_Tenkan",    0,    10000, 100),
-    "Ichimoku Kijun":     ("Ichimoku_Kijun",     0,    10000, 100),
-    "Donchian High":      ("Donchian_High",      0,    10000, 100),
-    "Donchian Low":       ("Donchian_Low",        0,    10000, 100),
-    "RSI 14":             ("RSI_14",             0,    100,   50),
-    "MACD Line":          ("MACD_line",          -100, 100,   0),
-    "MACD Signal":        ("MACD_signal",        -100, 100,   0),
-    "MACD Histogram":     ("MACD_hist",          -100, 100,   0),
-    "Stoch K":            ("Stoch_K",            0,    100,   50),
-    "Stoch D":            ("Stoch_D",            0,    100,   50),
-    "Stoch RSI":          ("Stoch_RSI",          0,    1,     0.5),
-    "CCI 20":             ("CCI_20",             -300, 300,   0),
-    "Williams R":         ("Williams_R",         -100, 0,     -50),
-    "ROC 12":             ("ROC_12",             -30,  30,    0),
-    "Ultimate Oscillator":("Ultimate_Oscillator",0,    100,   50),
-    "CMO":                ("CMO",                -100, 100,   0),
-    "TRIX":               ("TRIX",               -2,   2,     0),
-    "Schaff Trend Cycle": ("Schaff_Trend_Cycle", 0,    100,   75),
-    "Fisher Transform":   ("Fisher_Transform",   -5,   5,     0),
-    "Coppock Curve":      ("Coppock_Curve",      -10,  10,    0),
-    "Vortex VI+":         ("Vortex_Pos",         0,    3,     1),
-    "Vortex VI-":         ("Vortex_Neg",         0,    3,     1),
-    "Elder Bull Power":   ("Elder_Bull_Power",   -50,  50,    0),
-    "Elder Bear Power":   ("Elder_Bear_Power",   -50,  50,    0),
-    "RVI":                ("RVI",                -1,   1,     0),
-    "Mass Index":         ("Mass_Index",         20,   30,    26.5),
-    "ATR 14":             ("ATR_14",             0,    300,   50),
-    "Volatility %":       ("Volatility",         0,    10,    3),
-    "BB Upper":           ("BB_Upper",           0,    10000, 100),
-    "BB Middle":          ("BB_Middle",          0,    10000, 100),
-    "BB Lower":           ("BB_Lower",           0,    10000, 100),
-    "Keltner Upper":      ("Keltner_Upper",      0,    10000, 100),
-    "Keltner Lower":      ("Keltner_Lower",      0,    10000, 100),
-    "Spread (H-L)":       ("Spread",             0,    500,   50),
-    "MFI 14":             ("MFI_14",             0,    100,   50),
-    "OBV":                ("OBV",                -1e8, 1e8,   0),
-    "VWAP":               ("VWAP",               0,    10000, 100),
-    "Gap":                ("Gap",                -50,  50,    0),
-    "Pivot Point":        ("Pivot_Point",        0,    10000, 100),
-    "52W High":           ("52W_High",           0,    10000, 100),
-    "52W Low":            ("52W_Low",            0,    10000, 100),
-    "Returns %":          ("Returns",            -20,  20,    0),
-    "Log Returns":        ("Log_Returns",        -0.2, 0.2,   0),
+    # ── Price ─────────────────────────────────────────────────────────────────
+    "Open":                  ("Open",                 0,    10000, 100),
+    "High":                  ("High",                 0,    10000, 100),
+    "Low":                   ("Low",                  0,    10000, 100),
+    "Close":                 ("Close",                0,    10000, 100),
+    "Prev Close":            ("Prev_Close",           0,    10000, 100),
+    "Volume":                ("Volume",               0,    1e8,   500000),
+    "Spread (H-L)":          ("Spread",               0,    500,   50),
+    "Gap %":                 ("Gap",                  -50,  50,    0),
+    "Returns %":             ("Returns",              -20,  20,    0),
+    "Log Returns":           ("Log_Returns",          -0.2, 0.2,   0),
+
+    # ── Trend / MAs ───────────────────────────────────────────────────────────
+    "SMA 20":                ("SMA_20",               0,    10000, 100),
+    "SMA 50":                ("SMA_50",               0,    10000, 100),
+    "SMA 100":               ("SMA_100",              0,    10000, 100),
+    "SMA 200":               ("SMA_200",              0,    10000, 100),
+    "EMA 10":                ("EMA_10",               0,    10000, 100),
+    "EMA 13":                ("EMA_13",               0,    10000, 100),
+    "EMA 20":                ("EMA_20",               0,    10000, 100),
+    "EMA 50":                ("EMA_50",               0,    10000, 100),
+    "EMA 200":               ("EMA_200",              0,    10000, 100),
+    "HMA 20":                ("HMA_20",               0,    10000, 100),
+    "KAMA 20":               ("KAMA_20",              0,    10000, 100),
+    "FRAMA":                 ("FRAMA",                0,    10000, 100),
+
+    # ── Trend Systems ─────────────────────────────────────────────────────────
+    "Supertrend Signal":     ("Supertrend_Signal",    None, None,  None),
+    "Supertrend":            ("Supertrend",           0,    10000, 100),
+    "Parabolic SAR":         ("Parabolic_SAR",        0,    10000, 100),
+    "Ichimoku Tenkan":       ("Ichimoku_Tenkan",      0,    10000, 100),
+    "Ichimoku Kijun":        ("Ichimoku_Kijun",       0,    10000, 100),
+    "Donchian High":         ("Donchian_High",        0,    10000, 100),
+    "Donchian Low":          ("Donchian_Low",         0,    10000, 100),
+    "ADX 14":                ("ADX_14",               0,    100,   25),
+
+    # ── Momentum ──────────────────────────────────────────────────────────────
+    "RSI 14":                ("RSI_14",               0,    100,   50),
+    "MACD Line":             ("MACD_line",            -100, 100,   0),
+    "MACD Signal":           ("MACD_signal",          -100, 100,   0),
+    "MACD Histogram":        ("MACD_hist",            -100, 100,   0),
+    "Stoch K":               ("Stoch_K",              0,    100,   50),
+    "Stoch D":               ("Stoch_D",              0,    100,   50),
+    "Stoch RSI":             ("Stoch_RSI",            0,    1,     0.5),
+    "CCI 20":                ("CCI_20",               -300, 300,   0),
+    "Williams %R":           ("Williams_R",           -100, 0,     -50),
+    "ROC 12":                ("ROC_12",               -30,  30,    0),
+    "Ultimate Oscillator":   ("Ultimate_Oscillator",  0,    100,   50),
+    "CMO":                   ("CMO",                  -100, 100,   0),
+    "TRIX":                  ("TRIX",                 -2,   2,     0),
+    "Schaff Trend Cycle":    ("Schaff_Trend_Cycle",   0,    100,   75),
+    "Fisher Transform":      ("Fisher_Transform",     -5,   5,     0),
+    "Coppock Curve":         ("Coppock_Curve",        -10,  10,    0),
+    "Vortex VI+":            ("Vortex_Pos",           0,    3,     1),
+    "Vortex VI-":            ("Vortex_Neg",           0,    3,     1),
+    "Elder Bull Power":      ("Elder_Bull_Power",     -50,  50,    0),
+    "Elder Bear Power":      ("Elder_Bear_Power",     -50,  50,    0),
+    "RVI":                   ("RVI",                  -1,   1,     0),
+    "Mass Index":            ("Mass_Index",           20,   30,    26.5),
+
+    # ── Volatility ────────────────────────────────────────────────────────────
+    "ATR 14":                ("ATR_14",               0,    300,   50),
+    "Volatility %":          ("Volatility",           0,    10,    3),
+    "BB Upper":              ("BB_Upper",             0,    10000, 100),
+    "BB Middle":             ("BB_Middle",            0,    10000, 100),
+    "BB Lower":              ("BB_Lower",             0,    10000, 100),
+    "Keltner Upper":         ("Keltner_Upper",        0,    10000, 100),
+    "Keltner Lower":         ("Keltner_Lower",        0,    10000, 100),
+
+    # ── Volume ────────────────────────────────────────────────────────────────
+    "MFI 14":                ("MFI_14",               0,    100,   50),
+    "OBV":                   ("OBV",                  -1e8, 1e8,   0),
+    "VWAP":                  ("VWAP",                 0,    10000, 100),
+
+    # ── Price Levels ──────────────────────────────────────────────────────────
+    "Pivot Point":           ("Pivot_Point",          0,    10000, 100),
+    "52W High":              ("52W_High",             0,    10000, 100),
+    "52W Low":               ("52W_Low",              0,    10000, 100),
 }
 
 PRESETS_FILE = "presets.json"
@@ -110,466 +125,191 @@ def save_presets(presets):
         json.dump(presets, f)
 
 # ── STYLES ────────────────────────────────────────────────────────────────────
+
 st.markdown("""
 <style>
-
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap');
 
 :root {
-    --bg: #f4f3ee;
-    --bg2: #ffffff;
-    --bg3: #eeede8;
-    --bg4: #e4e3de;
-
-    --border: rgba(0,0,0,0.08);
-    --border2: rgba(0,0,0,0.14);
-
-    --text: #1a1a14;
-    --text2: #5a5950;
-    --text3: #9a9990;
-
-    --accent: #5a8a00;
-    --accent2: #008a58;
-    --red: #c24141;
-
-    --radius: 10px;
-    --radius-lg: 18px;
-
-    --font-head: 'Syne', sans-serif;
-    --font-mono: 'IBM Plex Mono', monospace;
-
-    color-scheme: light !important;
+    --bg:          #f4f3ee;
+    --bg2:         #ffffff;
+    --bg3:         #eeede8;
+    --bg4:         #e4e3de;
+    --border:      rgba(0,0,0,0.08);
+    --border2:     rgba(0,0,0,0.14);
+    --text:        #1a1a14;
+    --text2:       #5a5950;
+    --text3:       #9a9990;
+    --accent:      #5a8a00;
+    --accent2:     #008a58;
+    --red:         #c24141;
+    --radius:      10px;
+    --radius-lg:   18px;
+    --font-head:   'Syne', sans-serif;
+    --font-mono:   'IBM Plex Mono', monospace;
+    color-scheme:  light !important;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   GLOBAL
-───────────────────────────────────────────────────────────── */
-
-html,
-body,
-.stApp,
+html, body, .stApp,
 [data-testid="stAppViewContainer"],
 [data-testid="stHeader"] {
     background: var(--bg) !important;
-    color: var(--text) !important;
+    color:      var(--text) !important;
     font-family: var(--font-mono);
 }
 
 .block-container {
-    max-width: 100%;
-    padding-top: 2rem;
+    max-width:      100%;
+    padding-top:    2rem;
     padding-bottom: 2rem;
-    padding-left: 2rem;
-    padding-right: 2rem;
+    padding-left:   2rem;
+    padding-right:  2rem;
 }
 
-/* Typography */
 h1, h2, h3 {
-    font-family: var(--font-head) !important;
-    color: var(--text) !important;
+    font-family:    var(--font-head) !important;
+    color:          var(--text) !important;
     letter-spacing: -0.03em;
 }
+h1 { font-size: 2.3rem !important; font-weight: 700 !important; }
 
-h1 {
-    font-size: 2.3rem !important;
-    font-weight: 700 !important;
-}
+p, label, span, div { color: var(--text); }
 
-p,
-label,
-span,
-div {
-    color: var(--text);
-}
-
-/* ─────────────────────────────────────────────────────────────
-   SIDEBAR
-───────────────────────────────────────────────────────────── */
-
+/* SIDEBAR */
 section[data-testid="stSidebar"] {
-    background: #f8f7f3 !important;
+    background:   #f8f7f3 !important;
     border-right: 1px solid rgba(0,0,0,0.06);
 }
-
 section[data-testid="stSidebar"] .block-container {
-    padding-top: 1.8rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
+    padding-top:    1.8rem;
+    padding-left:   1rem;
+    padding-right:  1rem;
     padding-bottom: 2rem;
 }
-
-/* Sidebar title */
-.sidebar-title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 10px;
+.sidebar-title { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.sidebar-icon  {
+    width:42px; height:42px; border-radius:12px;
+    background: linear-gradient(135deg,#f2f7ea,#edf6e6);
+    border:1px solid rgba(90,138,0,0.10);
+    display:flex; align-items:center; justify-content:center; font-size:20px;
 }
+.sidebar-heading { font-family:var(--font-head); font-size:1.45rem; font-weight:700; letter-spacing:-0.03em; color:var(--text); }
+.sidebar-sub     { color:var(--text3); font-size:12px; margin-top:-2px; }
+.sidebar-label   { font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#5e5d55; margin-bottom:12px; }
+.sidebar-card    { background:#ffffff; border:1px solid rgba(0,0,0,0.06); border-radius:var(--radius-lg); padding:16px; margin-bottom:20px; box-shadow:0 1px 2px rgba(0,0,0,0.03); }
+hr { border-color:rgba(0,0,0,0.06) !important; margin-top:24px !important; margin-bottom:24px !important; }
 
-.sidebar-icon {
-    width: 42px;
-    height: 42px;
-
-    border-radius: 12px;
-
-    background: linear-gradient(135deg, #f2f7ea, #edf6e6);
-    border: 1px solid rgba(90,138,0,0.10);
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    font-size: 20px;
-}
-
-.sidebar-heading {
-    font-family: var(--font-head);
-    font-size: 1.45rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    color: var(--text);
-}
-
-.sidebar-sub {
-    color: var(--text3);
-    font-size: 12px;
-    margin-top: -2px;
-}
-
-/* Sidebar labels */
-.sidebar-label {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-
-    color: #5e5d55;
-
-    margin-bottom: 12px;
-}
-
-/* Sidebar cards */
-.sidebar-card {
-    background: #ffffff;
-
-    border: 1px solid rgba(0,0,0,0.06);
-    border-radius: var(--radius-lg);
-
-    padding: 16px;
-
-    margin-bottom: 20px;
-
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-}
-
-/* Dividers */
-hr {
-    border-color: rgba(0,0,0,0.06) !important;
-    margin-top: 24px !important;
-    margin-bottom: 24px !important;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   INPUTS
-───────────────────────────────────────────────────────────── */
-
+/* INPUTS */
 .stSelectbox div[data-baseweb="select"] > div,
-.stNumberInput input,
-.stTextInput input {
-    background: #fcfcfa !important;
-
-    border: 1px solid rgba(0,0,0,0.08) !important;
+.stNumberInput input, .stTextInput input {
+    background:  #fcfcfa !important;
+    border:      1px solid rgba(0,0,0,0.08) !important;
     border-radius: 12px !important;
-
-    min-height: 48px !important;
-
-    display: flex !important;
+    min-height:  48px !important;
+    display:     flex !important;
     align-items: center !important;
-
-    font-size: 14px !important;
-
-    transition: all 0.15s ease;
+    font-size:   14px !important;
+    transition:  all 0.15s ease;
 }
-
 .stSelectbox div[data-baseweb="select"] > div:hover,
-.stNumberInput input:hover,
-.stTextInput input:hover {
+.stNumberInput input:hover, .stTextInput input:hover {
     border-color: rgba(90,138,0,0.25) !important;
 }
+.stSelectbox span { display:flex !important; align-items:center !important; }
+div[data-testid="stRadio"]              { margin-top:-6px !important; }
+div[data-testid="stRadio"] label        { padding:2px 0 !important; }
+div[data-testid="stRadio"] > div        { gap:0.6rem; }
 
-/* Fix select alignment */
-.stSelectbox span {
-    display: flex !important;
-    align-items: center !important;
-}
-
-/* Radio styling */
-div[data-testid="stRadio"] {
-    margin-top: -6px !important;
-}
-
-div[data-testid="stRadio"] label[data-baseweb="radio"] {
-    padding: 2px 0 !important;
-}
-
-div[data-testid="stRadio"] > div {
-    gap: 0.6rem;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   BUTTONS
-───────────────────────────────────────────────────────────── */
-
-.stButton button,
-.stDownloadButton button,
-.stLinkButton a {
+/* BUTTONS */
+.stButton button, .stDownloadButton button, .stLinkButton a {
     border-radius: 12px !important;
-
-    border: 1px solid rgba(0,0,0,0.08) !important;
-
-    background: white !important;
-
-    min-height: 44px;
-
-    font-size: 13px !important;
-    font-weight: 600 !important;
-
-    transition: all 0.15s ease;
+    border:        1px solid rgba(0,0,0,0.08) !important;
+    background:    white !important;
+    min-height:    44px;
+    font-size:     13px !important;
+    font-weight:   600 !important;
+    transition:    all 0.15s ease;
 }
-
-/* Primary buttons */
 .stButton button[kind="primary"] {
-    background: linear-gradient(135deg, #6fa81f, #5a8a00) !important;
-
-    color: white !important;
-
-    border: none !important;
-
+    background:  linear-gradient(135deg,#6fa81f,#5a8a00) !important;
+    color:       white !important;
+    border:      none !important;
     font-weight: 700 !important;
-
-    box-shadow: 0 6px 18px rgba(90,138,0,0.16);
+    box-shadow:  0 6px 18px rgba(90,138,0,0.16);
 }
-
-.stButton button[kind="primary"]:hover {
-    transform: translateY(-1px);
-
-    box-shadow: 0 8px 22px rgba(90,138,0,0.22);
-}
-
-/* Secondary button hover */
-.stButton button:hover,
-.stDownloadButton button:hover,
-.stLinkButton a:hover {
+.stButton button[kind="primary"]:hover { transform:translateY(-1px); box-shadow:0 8px 22px rgba(90,138,0,0.22); }
+.stButton button:hover, .stDownloadButton button:hover, .stLinkButton a:hover {
     border-color: rgba(90,138,0,0.22) !important;
-
-    color: #5a8a00 !important;
-
-    background: #f7fbef !important;
+    color:        #5a8a00 !important;
+    background:   #f7fbef !important;
 }
 
-/* ─────────────────────────────────────────────────────────────
-   METRICS
-───────────────────────────────────────────────────────────── */
-
+/* METRICS */
 [data-testid="metric-container"] {
-    background: var(--bg2);
-
-    border: 1px solid var(--border);
+    background:    var(--bg2);
+    border:        1px solid var(--border);
     border-radius: var(--radius-lg);
-
-    padding: 18px;
-
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    padding:       18px;
+    box-shadow:    0 1px 2px rgba(0,0,0,0.03);
 }
+[data-testid="stMetricLabel"]  { color:var(--text3) !important; text-transform:uppercase; letter-spacing:0.06em; font-size:10px !important; font-family:var(--font-mono); }
+[data-testid="stMetricValue"]  { font-family:var(--font-head) !important; color:var(--text); font-size:30px !important; font-weight:700 !important; }
 
-[data-testid="stMetricLabel"] {
-    color: var(--text3) !important;
-
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-
-    font-size: 10px !important;
-    font-family: var(--font-mono);
-}
-
-[data-testid="stMetricValue"] {
-    font-family: var(--font-head) !important;
-
-    color: var(--text);
-
-    font-size: 30px !important;
-    font-weight: 700 !important;
-}
-
-/* ─────────────────────────────────────────────────────────────
-   TABLE
-───────────────────────────────────────────────────────────── */
-
+/* TABLE */
 .tbl-wrap {
-    overflow-x: auto;
-    overflow-y: auto;
-
-    max-height: 72vh;
-
-    background: var(--bg2);
-
-    border: 1px solid var(--border);
+    overflow-x:    auto;
+    overflow-y:    auto;
+    max-height:    72vh;
+    background:    var(--bg2);
+    border:        1px solid var(--border);
     border-radius: var(--radius-lg);
 }
-
-.screener-table {
-    width: 100%;
-
-    border-collapse: collapse;
-
-    min-width: 1200px;
-
-    font-size: 12px;
-}
-
-/* Table headers */
+.screener-table { width:100%; border-collapse:collapse; min-width:1200px; font-size:12px; }
 .screener-table th {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-
-    background: var(--bg2);
-
-    color: var(--text3);
-
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-
-    font-size: 10px;
-    font-weight: 600;
-
-    padding: 12px;
-
-    text-align: left;
-
-    border-bottom: 1px solid var(--border);
-
-    white-space: nowrap;
+    position:sticky; top:0; z-index:5;
+    background:var(--bg2); color:var(--text3);
+    text-transform:uppercase; letter-spacing:0.05em; font-size:10px; font-weight:600;
+    padding:12px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap;
 }
+.screener-table td  { padding:12px; border-bottom:1px solid var(--border); color:var(--text); white-space:nowrap; }
+.screener-table tr:last-child td { border-bottom:none; }
+.screener-table tr:hover td { background:var(--bg3); }
 
-/* Table cells */
-.screener-table td {
-    padding: 12px;
-
-    border-bottom: 1px solid var(--border);
-
-    color: var(--text);
-
-    white-space: nowrap;
-}
-
-.screener-table tr:last-child td {
-    border-bottom: none;
-}
-
-.screener-table tr:hover td {
-    background: var(--bg3);
-}
-
-/* ─────────────────────────────────────────────────────────────
-   BADGES
-───────────────────────────────────────────────────────────── */
-
+/* BADGES */
 .badge-buy {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-
-    padding: 4px 10px !important;
-
-    border-radius: 999px !important;
-
-    border: 1px solid rgba(0,138,88,0.18) !important;
-
-    background: rgba(0,138,88,0.10) !important;
-
-    color: #008a58 !important;
-
-    font-size: 10px !important;
-    font-weight: 700 !important;
-
-    line-height: 1 !important;
-
-    text-transform: uppercase;
+    display:inline-flex !important; align-items:center; justify-content:center;
+    padding:4px 10px !important; border-radius:999px !important;
+    border:1px solid rgba(0,138,88,0.18) !important; background:rgba(0,138,88,0.10) !important;
+    color:#008a58 !important; font-size:10px !important; font-weight:700 !important;
+    line-height:1 !important; text-transform:uppercase;
 }
-
 .badge-sell {
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-
-    padding: 4px 10px !important;
-
-    border-radius: 999px !important;
-
-    border: 1px solid rgba(194,65,65,0.18) !important;
-
-    background: rgba(194,65,65,0.10) !important;
-
-    color: #c24141 !important;
-
-    font-size: 10px !important;
-    font-weight: 700 !important;
-
-    line-height: 1 !important;
-
-    text-transform: uppercase;
+    display:inline-flex !important; align-items:center; justify-content:center;
+    padding:4px 10px !important; border-radius:999px !important;
+    border:1px solid rgba(194,65,65,0.18) !important; background:rgba(194,65,65,0.10) !important;
+    color:#c24141 !important; font-size:10px !important; font-weight:700 !important;
+    line-height:1 !important; text-transform:uppercase;
 }
 
-/* Returns */
-.up {
-    color: var(--accent2);
-    font-weight: 600;
-}
+.up  { color:var(--accent2); font-weight:600; }
+.dn  { color:var(--red);     font-weight:600; }
+.neu { color:var(--text2); }
 
-.dn {
-    color: var(--red);
-    font-weight: 600;
-}
+[data-testid="stCaptionContainer"] { color:#8c8b83 !important; }
+.element-container { margin-bottom:0.6rem; }
 
-.neu {
-    color: var(--text2);
-}
-
-/* Captions */
-[data-testid="stCaptionContainer"] {
-    color: #8c8b83 !important;
-}
-
-/* Remove excess spacing */
-.element-container {
-    margin-bottom: 0.6rem;
-}
-
-/* Scrollbars */
-::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--bg4);
-    border-radius: 10px;
-}
-
+::-webkit-scrollbar       { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:var(--bg4); border-radius:10px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
+
 @st.cache_resource
 def get_gspread_client():
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if not creds_json:
-        # Try streamlit secrets
         try:
             creds_json = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"]
         except Exception:
@@ -582,8 +322,8 @@ def get_gspread_client():
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
-
 # ── DATA FETCH ────────────────────────────────────────────────────────────────
+
 @st.cache_data(ttl=300)
 def load_sheet_data():
     gc        = get_gspread_client()
@@ -591,72 +331,52 @@ def load_sheet_data():
     worksheet = sh.get_worksheet(0)
     df        = gd.get_as_dataframe(worksheet, evaluate_formulas=True, dtype=str)
     df        = df.dropna(how='all').dropna(axis=1, how='all')
-    numeric_cols = [c for c in df.columns if c not in ('Date','Stock','Universe','Supertrend_Signal')]
+    numeric_cols = [c for c in df.columns if c not in ('Date', 'Stock', 'Universe', 'Supertrend_Signal')]
     for c in numeric_cols:
         df[c] = pd.to_numeric(df[c], errors='coerce')
     return df
 
-
 # ── FILTER ENGINE ─────────────────────────────────────────────────────────────
+
 def apply_filters(df, filters, logic):
     if not filters:
         return df
+
     masks = []
     for f in filters:
-        col      = f['col']
-        op       = f['op']
-        val      = f['val']
-        val_type = f.get('val_type', 'number')   # 'number' or 'column'
-
+        col, op, val = f['col'], f['op'], f['val']
         if col not in df.columns:
+            # Warn instead of silently skipping
+            st.warning(f"Column `{col}` not found in data — filter skipped. Re-run the screener to populate all indicators.")
             continue
-
-        left = pd.to_numeric(df[col], errors='coerce')
-
-        # Text filter (BUY / SELL)
-        if op == '==' and val_type == 'number' and isinstance(val, str):
+        if op == '==' and isinstance(val, str):
             masks.append(df[col].astype(str).str.upper() == val.upper())
-            continue
-
-        # Right-hand side: another column or a fixed number
-        if val_type == 'column':
-            if val not in df.columns:
-                continue
-            right = pd.to_numeric(df[val], errors='coerce')
-        else:
-            right = float(val)
-
-        if op == '>':
-            masks.append(left > right)
+        elif op == '>':
+            masks.append(pd.to_numeric(df[col], errors='coerce') > float(val))
         elif op == '<':
-            masks.append(left < right)
+            masks.append(pd.to_numeric(df[col], errors='coerce') < float(val))
         elif op == '>=':
-            masks.append(left >= right)
+            masks.append(pd.to_numeric(df[col], errors='coerce') >= float(val))
         elif op == '<=':
-            masks.append(left <= right)
-        elif op == '==':
-            masks.append(left == right)
+            masks.append(pd.to_numeric(df[col], errors='coerce') <= float(val))
 
     if not masks:
         return df
+
     combined = masks[0]
     for m in masks[1:]:
         combined = (combined & m) if logic == "AND" else (combined | m)
     return df[combined]
 
-
 # ── SESSION STATE ─────────────────────────────────────────────────────────────
-if 'filters' not in st.session_state:
-    st.session_state.filters = []
-if 'logic' not in st.session_state:
-    st.session_state.logic = "AND"
-if 'universe' not in st.session_state:
-    st.session_state.universe = "ALL"
-if 'presets' not in st.session_state:
-    st.session_state.presets = load_presets()
 
+if 'filters'  not in st.session_state: st.session_state.filters  = []
+if 'logic'    not in st.session_state: st.session_state.logic    = "AND"
+if 'universe' not in st.session_state: st.session_state.universe = "ALL"
+if 'presets'  not in st.session_state: st.session_state.presets  = load_presets()
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
+
 with st.sidebar:
     st.markdown("""
     <div class="sidebar-title">
@@ -667,83 +387,49 @@ with st.sidebar:
         </div>
     </div>
     """, unsafe_allow_html=True)
+
     st.divider()
 
     # Universe toggle
     st.markdown('<div class="sidebar-label">Universe</div>', unsafe_allow_html=True)
     univ = st.radio("Universe", ["NIFTY 100", "LargeMidCap 250", "Both"], index=2, label_visibility="collapsed")
     st.session_state.universe = {
-        "NIFTY 100":       "NIFTY100",
-        "LargeMidCap 250": "NIFTY_LARGEMIDCAP250",
-        "Both":            "ALL",
+        "NIFTY 100":        "NIFTY100",
+        "LargeMidCap 250":  "NIFTY_LARGEMIDCAP250",
+        "Both":             "ALL",
     }[univ]
 
     st.divider()
 
-    # ── ADD FILTER (flat single dropdown) ─────────────────────────────────────
+    # ── ADD FILTER ────────────────────────────────────────────────────────────
     st.markdown("**Add Filter**")
-    sel_indicator = st.selectbox("Indicator", list(ALL_INDICATORS.keys()),
-                                 label_visibility="collapsed")
+    sel_indicator = st.selectbox("Indicator", list(ALL_INDICATORS.keys()), label_visibility="collapsed")
     col_name, vmin, vmax, vdefault = ALL_INDICATORS[sel_indicator]
-
     is_text = vmin is None
+
     if is_text:
-        op       = "=="
-        val      = st.selectbox("Value", ["BUY", "SELL"])
-        val_type = "number"
-        val_display = val
+        op  = "=="
+        val = st.selectbox("Value", ["BUY", "SELL"])
     else:
-        op = st.selectbox("Operator", [">", "<", ">=", "<="])
-
-        # ── Toggle: fixed number vs another column ──────────────────────────
-        threshold_mode = st.radio(
-            "Threshold type",
-            ["Fixed Value", "Another Column"],
-            horizontal=True,
-            key="threshold_mode",
-            label_visibility="collapsed",
-        )
-
-        if threshold_mode == "Fixed Value":
-            val      = st.number_input("Threshold", value=float(vdefault), step=0.1, format="%.2f")
-            val_type = "number"
-            val_display = f"{val:.2f}"
-        else:
-            # All numeric indicator labels except the currently selected one
-            numeric_labels = [
-                lbl for lbl, (c, mn, mx, _) in ALL_INDICATORS.items()
-                if mn is not None and lbl != sel_indicator
-            ]
-            val_col_label = st.selectbox(
-                "Compare to column",
-                numeric_labels,
-                key="val_col",
-                label_visibility="visible",
-            )
-            val         = ALL_INDICATORS[val_col_label][0]   # actual column name
-            val_type    = "column"
-            val_display = val_col_label
+        op  = st.selectbox("Operator", [">", "<", ">=", "<="])
+        val = st.number_input("Threshold", value=float(vdefault), step=0.1, format="%.2f")
 
     if st.button("＋ Add Filter", use_container_width=True, type="primary"):
         st.session_state.filters.append({
-            "label":   sel_indicator,
-            "col":     col_name,
-            "op":      op,
-            "val":     val,
-            "val_type": val_type,
-            "display": f"{sel_indicator} {op} {val_display}",
+            "label": sel_indicator,
+            "col":   col_name,
+            "op":    op,
+            "val":   val,
         })
         st.rerun()
 
     st.divider()
 
-    # ── CUSTOM PRESETS ────────────────────────────────────────────────────────
+    # ── PRESETS ───────────────────────────────────────────────────────────────
     st.markdown("**My Presets**")
 
-    # Save current filters as preset
     if st.session_state.filters:
-        preset_name = st.text_input("Save current filters as:", placeholder="e.g. Breakout Setup",
-                                    label_visibility="collapsed")
+        preset_name = st.text_input("Save current filters as:", placeholder="e.g. Breakout Setup", label_visibility="collapsed")
         if st.button("💾 Save Preset", use_container_width=True):
             if preset_name.strip():
                 st.session_state.presets[preset_name.strip()] = {
@@ -756,7 +442,6 @@ with st.sidebar:
             else:
                 st.warning("Enter a name first.")
 
-    # Load / delete saved presets
     if st.session_state.presets:
         for pname, pdata in list(st.session_state.presets.items()):
             pc1, pc2 = st.columns([3, 1])
@@ -777,9 +462,11 @@ with st.sidebar:
 
     # Logic toggle
     st.markdown("**Filter Logic**")
-    st.session_state.logic = st.radio("", ["AND", "OR"], horizontal=True,
-                                      index=0 if st.session_state.logic=="AND" else 1,
-                                      label_visibility="collapsed")
+    st.session_state.logic = st.radio(
+        "", ["AND", "OR"], horizontal=True,
+        index=0 if st.session_state.logic == "AND" else 1,
+        label_visibility="collapsed",
+    )
 
     # Active filters list
     if st.session_state.filters:
@@ -788,11 +475,8 @@ with st.sidebar:
         for i, f in enumerate(st.session_state.filters):
             col_a, col_b = st.columns([4, 1])
             with col_a:
-                display = f.get('display') or (
-                    f"`{f['label']}` {f['op']} " +
-                    (f['val'] if isinstance(f['val'], str) else f"{f['val']:.2f}")
-                )
-                st.caption(display)
+                val_str = f['val'] if isinstance(f['val'], str) else f"{f['val']:.2f}"
+                st.caption(f"`{f['label']}` {f['op']} {val_str}")
             with col_b:
                 if st.button("✕", key=f"rm_{i}"):
                     to_remove.append(i)
@@ -809,12 +493,12 @@ with st.sidebar:
     # Manual run trigger
     st.markdown("**Data Refresh**")
     if st.button("☁ Run Screener Now", use_container_width=True, type="primary"):
-        with st.spinner("Fetching & calculating... (takes 3–5 min)"):
+        with st.spinner("Fetching & calculating… (takes 3–5 min)"):
             try:
                 import screener
                 log_lines = []
                 screener.run(log=lambda s: log_lines.append(s))
-                st.success("Done! Refresh page to see new data.")
+                st.success("Done! Data has been refreshed.")
                 for line in log_lines:
                     st.caption(line)
                 st.cache_data.clear()
@@ -822,31 +506,31 @@ with st.sidebar:
                 import traceback
                 st.error(traceback.format_exc())
 
-    st.link_button("↗ Open Source Sheet",
-                   f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
-                   use_container_width=True)
-
+    st.link_button(
+        "↗ Open Source Sheet",
+        f"https://docs.google.com/spreadsheets/d/{SHEET_ID}",
+        use_container_width=True,
+    )
 
 # ── MAIN AREA ─────────────────────────────────────────────────────────────────
+
 st.markdown("# Screener")
 st.caption("Multi-indicator filter · AND / OR logic · live results")
 
-# Load data
-with st.spinner("Fetching from Google Sheet..."):
+with st.spinner("Fetching from Google Sheet…"):
     try:
-        df = load_sheet_data()
+        df      = load_sheet_data()
         data_ok = True
     except Exception as e:
         st.error(f"Failed to load sheet: {e}")
         data_ok = False
-        df = pd.DataFrame()
+        df      = pd.DataFrame()
 
 if data_ok and not df.empty:
+
     # Universe filter
-    if st.session_state.universe != "ALL":
-        view_df = df[df['Universe'] == st.session_state.universe].copy()
-    else:
-        view_df = df.copy()
+    view_df = df.copy() if st.session_state.universe == "ALL" else \
+              df[df['Universe'] == st.session_state.universe].copy()
 
     # Apply filters
     filtered = apply_filters(view_df, st.session_state.filters, st.session_state.logic)
@@ -854,38 +538,42 @@ if data_ok and not df.empty:
     # Sort controls
     sort_col, sort_dir = st.columns([5, 1.5], vertical_alignment="bottom")
     with sort_col:
-        sort_by = st.selectbox("Sort by", ["Returns", "Close", "Volume", "RSI_14", "MFI_14", "Open", "High", "Low"],
-                               label_visibility="visible", key="sort_by")
+        sort_by = st.selectbox(
+            "Sort by",
+            ["Returns", "Close", "Volume", "RSI_14", "MFI_14", "ADX_14", "Open", "High", "Low"],
+            label_visibility="visible", key="sort_by",
+        )
     with sort_dir:
         sort_asc = st.selectbox("", ["High→Low", "Low→High"], label_visibility="collapsed", key="sort_dir")
 
     if sort_by in filtered.columns:
-        filtered = filtered.sort_values(sort_by, ascending=(sort_asc=="Low→High"))
+        filtered = filtered.sort_values(sort_by, ascending=(sort_asc == "Low→High"))
 
     # KPIs
-    last_date = df['Date'].max() if 'Date' in df.columns else "—"
-    buy_count = (filtered['Supertrend_Signal'].astype(str).str.upper()=="BUY").sum() if 'Supertrend_Signal' in filtered.columns else 0
+    last_date  = df['Date'].max() if 'Date' in df.columns else "—"
+    buy_count  = (filtered['Supertrend_Signal'].astype(str).str.upper() == "BUY").sum() \
+                 if 'Supertrend_Signal' in filtered.columns else 0
 
-    k1, k2, k3, k4 = st.columns([1,1,1,1], gap="medium")
-    k1.metric("Total Stocks", len(view_df))
-    k2.metric("Matching", len(filtered))
+    k1, k2, k3, k4 = st.columns([1, 1, 1, 1], gap="medium")
+    k1.metric("Total Stocks",   len(view_df))
+    k2.metric("Matching",       len(filtered))
     k3.metric("Active Filters", len(st.session_state.filters))
-    k4.metric("Last Update", str(last_date))
+    k4.metric("Last Update",    str(last_date))
 
     st.divider()
 
     # Results table
     if filtered.empty:
-        st.info("∅ No stocks match active filters. Relax a threshold or switch to OR logic.")
+        st.info("∅ No stocks match the active filters. Relax a threshold or switch to OR logic.")
     else:
         def fmt(val, decimals=2):
             if pd.isna(val): return "—"
-            try: return f"{float(val):.{decimals}f}"
+            try:    return f"{float(val):.{decimals}f}"
             except: return str(val)
 
         def ret_class(val):
             try:
-                v = float(val)
+                v   = float(val)
                 cls = "up" if v > 0 else ("dn" if v < 0 else "neu")
                 return f'<span class="{cls}">{v:+.2f}%</span>'
             except:
@@ -898,10 +586,9 @@ if data_ok and not df.empty:
             return v
 
         rows = []
-        display_cols = ['Stock','Universe','Open','High','Low','Close','Prev_Close','Returns','Volume','RSI_14','MFI_14','Supertrend_Signal']
         for _, row in filtered.iterrows():
-            stock = str(row.get('Stock','')).replace('.NS','')
-            univ  = "N100" if str(row.get('Universe',''))=="NIFTY100" else "LMC"
+            stock = str(row.get('Stock', '')).replace('.NS', '')
+            univ  = "N100" if str(row.get('Universe', '')) == "NIFTY100" else "LMC"
             rows.append(f"""<tr>
                 <td><strong>{stock}</strong></td>
                 <td><span style="color:#9b9a94;font-size:10px">{univ}</span></td>
@@ -911,22 +598,23 @@ if data_ok and not df.empty:
                 <td>{fmt(row.get('Close'))}</td>
                 <td>{fmt(row.get('Prev_Close'))}</td>
                 <td>{ret_class(row.get('Returns'))}</td>
-                <td>{fmt(row.get('Volume'),0)}</td>
+                <td>{fmt(row.get('Volume'), 0)}</td>
                 <td>{fmt(row.get('RSI_14'))}</td>
                 <td>{fmt(row.get('MFI_14'))}</td>
-                <td>{signal_badge(row.get('Supertrend_Signal',''))}</td>
+                <td>{fmt(row.get('ADX_14'))}</td>
+                <td>{signal_badge(row.get('Supertrend_Signal', ''))}</td>
             </tr>""")
 
         table_html = f"""
         <div class="tbl-wrap">
-        <table class="screener-table">
-          <thead><tr>
-            <th>Stock</th><th>Univ</th>
-            <th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Prev Close</th>
-            <th>Return%</th><th>Volume</th><th>RSI</th><th>MFI</th><th>Signal</th>
-          </tr></thead>
-          <tbody>{"".join(rows)}</tbody>
-        </table>
+          <table class="screener-table">
+            <thead><tr>
+              <th>Stock</th><th>Univ</th>
+              <th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Prev Close</th>
+              <th>Return%</th><th>Volume</th><th>RSI</th><th>MFI</th><th>ADX</th><th>Signal</th>
+            </tr></thead>
+            <tbody>{"".join(rows)}</tbody>
+          </table>
         </div>
         """
         st.markdown(table_html, unsafe_allow_html=True)
@@ -939,6 +627,7 @@ if data_ok and not df.empty:
             file_name=f"screener_{last_date}.csv",
             mime="text/csv",
         )
+
 else:
     if data_ok:
-        st.warning("Sheet is empty. Run the screener first.")
+        st.warning("Sheet is empty. Run the screener first using the sidebar button.")
