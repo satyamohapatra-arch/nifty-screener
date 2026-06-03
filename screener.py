@@ -1,5 +1,5 @@
-# screener.py — Full indicator suite, matches Google Colab exactly.
-# Pushes 68-column snapshot to Google Sheet.
+# screener.py
+# ── SETUP ─────────────────────────────────────────────────────────────────────
 
 import os
 import json
@@ -17,67 +17,80 @@ from google.oauth2.service_account import Credentials
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
 
-SHEET_ID        = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
-NIFTY100_URL    = "https://drive.google.com/uc?id=1SbcUYzWZPEd2zhK1kkNndYVmkDskp9fp"
-LARGEMIDCAP_URL = "https://drive.google.com/uc?id=1BzI5KjtkkQ2H-LvUNnFXJDAki5IslJUP"
+SHEET_ID   = "1JWHOhfTFhS0345GC4KMGHYCa1F8YEdDk2Skb85R2p5U"
+MASTER_PATH = "master_data.csv"
+NIFTY100_URL     = "https://drive.google.com/uc?id=1SbcUYzWZPEd2zhK1kkNndYVmkDskp9fp"
+LARGEMIDCAP_URL  = "https://drive.google.com/uc?id=1BzI5KjtkkQ2H-LvUNnFXJDAki5IslJUP"
 
 SCOPES = [
     "https://spreadsheets.google.com/feeds",
     "https://www.googleapis.com/auth/drive",
 ]
 
-# ── COLUMNS (68 total) ────────────────────────────────────────────────────────
+# ── COLUMNS ───────────────────────────────────────────────────────────────────
 
 COLS = [
     'Date', 'Stock', 'Universe',
     'Open', 'High', 'Low', 'Close', 'Volume',
+    # Trend / MAs
     'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200',
     'EMA_10', 'EMA_13', 'EMA_20', 'EMA_50', 'EMA_200',
-    'HMA_20', 'KAMA_20',
-    'Ichimoku_Tenkan', 'Ichimoku_Kijun',
+    'HMA_20', 'KAMA_20', 'FRAMA',
+    # Trend systems
     'Supertrend', 'Supertrend_Signal',
-    'Parabolic_SAR', 'ADX_14',
+    'Parabolic_SAR',
+    'Ichimoku_Tenkan', 'Ichimoku_Kijun',
     'Donchian_High', 'Donchian_Low',
-    'RSI_14', 'MACD_line', 'MACD_signal', 'MACD_hist',
+    'ADX_14',
+    # Momentum
+    'RSI_14',
+    'MACD_line', 'MACD_signal', 'MACD_hist',
     'Stoch_K', 'Stoch_D', 'Stoch_RSI',
-    'CCI_20', 'Williams_R', 'ROC_12',
+    'CCI_20',
+    'Williams_R',
+    'ROC_12',
     'Ultimate_Oscillator',
-    'ATR_14',
-    'BB_Upper', 'BB_Middle', 'BB_Lower',
-    'Keltner_Upper', 'Keltner_Lower',
-    'OBV', 'VWAP', 'MFI_14',
-    'Pivot_Point',
-    '52W_High', '52W_Low',
-    'Fisher_Transform', 'Schaff_Trend_Cycle', 'FRAMA',
-    'Coppock_Curve', 'Mass_Index',
+    'CMO',
+    'TRIX',
+    'Schaff_Trend_Cycle',
+    'Fisher_Transform',
+    'Coppock_Curve',
     'Vortex_Pos', 'Vortex_Neg',
-    'CMO', 'TRIX',
     'Elder_Bull_Power', 'Elder_Bear_Power',
     'RVI',
-    'Prev_Close', 'Gap', 'Returns', 'Log_Returns',
-    'Spread', 'Volatility',
+    'Mass_Index',
+    # Volatility
+    'ATR_14',
+    'Volatility',
+    'BB_Upper', 'BB_Middle', 'BB_Lower',
+    'Keltner_Upper', 'Keltner_Lower',
+    'Spread',
+    # Volume
+    'MFI_14',
+    'OBV',
+    'VWAP',
+    # Price derived
+    'Gap',
+    'Pivot_Point',
+    '52W_High', '52W_Low',
+    'Prev_Close',
+    'Returns',
+    'Log_Returns',
 ]
 
 # ── GOOGLE AUTH ───────────────────────────────────────────────────────────────
 
 def get_gspread_client():
     creds_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
-    if not creds_json:
-        try:
-            import streamlit as st
-            val = st.secrets["GOOGLE_SERVICE_ACCOUNT_JSON"]
-            creds_json = json.dumps(dict(val)) if hasattr(val, 'keys') else val
-        except Exception:
-            pass
     if creds_json:
-        info = json.loads(creds_json) if isinstance(creds_json, str) else dict(creds_json)
+        info = json.loads(creds_json)
     else:
         with open("service_account.json") as f:
             info = json.load(f)
     creds = Credentials.from_service_account_info(info, scopes=SCOPES)
     return gspread.authorize(creds)
 
-# ── LAST TRADING DAY ──────────────────────────────────────────────────────────
+# ── DATE ──────────────────────────────────────────────────────────────────────
 
 def last_trading_day():
     ist = zoneinfo.ZoneInfo("Asia/Kolkata")
@@ -88,564 +101,453 @@ def last_trading_day():
         day -= timedelta(days=1)
     return day.strftime('%Y-%m-%d')
 
-# ── BULK DOWNLOAD ─────────────────────────────────────────────────────────────
+# ── DOWNLOAD ──────────────────────────────────────────────────────────────────
 
-def download_universe(symbols_url, universe_name, log=print):
-    master_path = f"master_data_{universe_name}.csv"
-    stocks      = [s + ".NS" for s in pd.read_csv(symbols_url)["Symbol"].tolist()]
-    END_DATE    = last_trading_day()
-    FETCH_END   = (datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+def download_universe(symbols_url, universe_name):
+    stocks = [
+        s + ".NS"
+        for s in pd.read_csv(symbols_url)["Symbol"].tolist()
+    ]
 
-    log(f"[{universe_name}] {len(stocks)} stocks | end={END_DATE}")
+    END_DATE   = last_trading_day()
+    FETCH_END  = (
+        datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)
+    ).strftime('%Y-%m-%d')
 
-    if os.path.exists(master_path):
-        existing = pd.read_csv(master_path)
+    if os.path.exists(MASTER_PATH):
+        existing   = pd.read_csv(MASTER_PATH)
         existing['Date'] = pd.to_datetime(existing['Date'])
-        last_date = existing['Date'].max()
+        last_date  = existing[existing['Universe'] == universe_name]['Date'].max()
         if pd.isna(last_date):
             start_date = "2021-01-01"
-            log(f"[{universe_name}] No valid dates in master — full download")
         else:
             start_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
-            log(f"[{universe_name}] Last date in master: {last_date.date()} — fetching from {start_date}")
     else:
         start_date = "2021-01-01"
         existing   = None
-        log(f"[{universe_name}] No master CSV found — full download from {start_date}")
 
     if start_date > END_DATE:
-        log(f"[{universe_name}] Already up to date. Skipping download.")
-        return existing if existing is not None else pd.DataFrame()
+        print(f"  [{universe_name}] Already up-to-date (last={END_DATE}). Skipping download.")
+        return (
+            existing[existing['Universe'] == universe_name]
+            if existing is not None
+            else pd.DataFrame()
+        )
 
-    # ── Batch download: 10 tickers at a time for reliable full history ────────
-    BATCH_SIZE = 10
-    batches    = [stocks[i:i+BATCH_SIZE] for i in range(0, len(stocks), BATCH_SIZE)]
-    log(f"[{universe_name}] Downloading {len(stocks)} tickers in {len(batches)} batches of {BATCH_SIZE}...")
-
+    print(f"  [{universe_name}] Fetching {start_date} → {END_DATE} for {len(stocks)} stocks…")
     all_data = []
-    success  = 0
-    skipped  = 0
-
-    for b_idx, batch in enumerate(batches):
+    for stock in stocks:
         try:
-            raw = yf.download(
-                batch,
+            df = yf.download(
+                stock,
                 start=start_date,
                 end=FETCH_END,
                 interval="1d",
                 auto_adjust=False,
                 progress=False,
-                group_by="ticker",
-                threads=True,
             )
+            if df.empty:
+                continue
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            df = df.reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
+            df["Stock"]    = stock
+            df["Universe"] = universe_name
+            all_data.append(df)
         except Exception as e:
-            log(f"  Batch {b_idx+1} download exception: {e}")
-            skipped += len(batch)
-            continue
+            print(f"    Error {stock}: {e}")
 
-        if raw is None or raw.empty:
-            log(f"  Batch {b_idx+1} returned empty — skipping")
-            skipped += len(batch)
-            continue
-
-        for stock in batch:
-            try:
-                # Extract per-ticker slice
-                if isinstance(raw.columns, pd.MultiIndex):
-                    lvl0 = raw.columns.get_level_values(0).unique().tolist()
-                    lvl1 = raw.columns.get_level_values(1).unique().tolist()
-
-                    # group_by='ticker' → level 0 = ticker, level 1 = field
-                    if stock in lvl0:
-                        df = raw[stock].copy()
-                    # single ticker in batch → level 0 = field, no ticker level
-                    elif len(batch) == 1:
-                        df = raw.droplevel(1, axis=1).copy()
-                        df = df.loc[:, ~df.columns.duplicated()]
-                    else:
-                        log(f"  SKIP {stock}: not found in batch result")
-                        skipped += 1
-                        continue
-                else:
-                    df = raw.copy()
-
-                # Drop rows where ALL price cols are NaN
-                df = df.dropna(subset=['Close'])
-                if df.empty:
-                    log(f"  SKIP {stock}: no Close data")
-                    skipped += 1
-                    continue
-
-                df = df.reset_index()
-
-                # Normalise column names — 'index' happens when yfinance index has no name
-                rename_map = {}
-                for c in df.columns:
-                    cl = str(c).lower().strip()
-                    if cl in ('date', 'datetime', 'index'):  rename_map[c] = 'Date'
-                    elif cl == 'open':                       rename_map[c] = 'Open'
-                    elif cl == 'high':                       rename_map[c] = 'High'
-                    elif cl == 'low':                        rename_map[c] = 'Low'
-                    elif cl == 'close':                      rename_map[c] = 'Close'
-                    elif cl == 'volume':                     rename_map[c] = 'Volume'
-                df = df.rename(columns=rename_map)
-
-                required = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-                missing  = [c for c in required if c not in df.columns]
-                if missing:
-                    log(f"  SKIP {stock}: missing {missing} — got {df.columns.tolist()}")
-                    skipped += 1
-                    continue
-
-                df = df[required].copy()
-                df['Date']     = pd.to_datetime(df['Date']).dt.tz_localize(None)
-                df['Stock']    = stock
-                df['Universe'] = universe_name
-                all_data.append(df)
-                success += 1
-
-            except Exception as e:
-                log(f"  ERROR {stock}: {e}")
-                skipped += 1
-
-        log(f"  Batch {b_idx+1}/{len(batches)} done | running total: {success} OK")
-
-    log(f"[{universe_name}] Parsed: {success} OK | {skipped} skipped")
-
-    if not all_data:
-        log(f"[{universe_name}] No usable data after parsing — aborting save.")
-        return existing if existing is not None else pd.DataFrame()
-
-    new_data = pd.concat(all_data, ignore_index=True)
-    log(f"[{universe_name}] New rows: {len(new_data):,}")
+    new_data = pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
     if existing is not None and not new_data.empty:
         combined = pd.concat([existing, new_data], ignore_index=True)
-        combined = combined.drop_duplicates(subset=['Date', 'Stock'])
-        combined.to_csv(master_path, index=False)
-        log(f"[{universe_name}] Master updated: {len(combined):,} rows → {master_path}")
-        return combined
+        combined = combined.drop_duplicates(subset=['Date', 'Stock', 'Universe'])
+        combined.to_csv(MASTER_PATH, index=False)
+        return combined[combined['Universe'] == universe_name]
+
+    if existing is not None and new_data.empty:
+        return existing[existing['Universe'] == universe_name]
 
     if not new_data.empty:
-        new_data.to_csv(master_path, index=False)
-        log(f"[{universe_name}] Master saved: {len(new_data):,} rows → {master_path}")
-    return new_data
+        new_data.to_csv(MASTER_PATH, index=False)
+        return new_data
+
+    return pd.DataFrame()
+
+# ── HELPERS ───────────────────────────────────────────────────────────────────
+
+def _ema(series, span):
+    return series.ewm(span=span, adjust=False).mean()
+
+def _sma(series, window):
+    return series.rolling(window).mean()
+
+def _atr(high, low, close, period=14):
+    hl  = high - low
+    hc  = (high - close.shift()).abs()
+    lc  = (low  - close.shift()).abs()
+    tr  = pd.concat([hl, hc, lc], axis=1).max(axis=1)
+    return tr.ewm(span=period, adjust=False).mean()
 
 # ── INDICATORS ────────────────────────────────────────────────────────────────
 
-def calculate_indicators(data):
-    data  = data.sort_values('Date').copy()
-    n     = len(data)
-    if n < 30:
-        return data
+def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
+    data  = data.sort_values('Date').reset_index(drop=True).copy()
     close = data['Close']
     high  = data['High']
     low   = data['Low']
     vol   = data['Volume']
-    open_ = data['Open']
+    n     = len(data)
 
-    # SMA
+    # ── Simple / Exponential MAs ──────────────────────────────────────────────
     for w in [20, 50, 100, 200]:
-        data[f'SMA_{w}'] = close.rolling(w).mean()
+        data[f'SMA_{w}'] = _sma(close, w)
 
-    # EMA
     for w in [10, 13, 20, 50, 200]:
-        data[f'EMA_{w}'] = close.ewm(span=w, adjust=False).mean()
+        data[f'EMA_{w}'] = _ema(close, w)
 
-    def wma(series, period):
-        weights = np.arange(1, period + 1)
-        return series.rolling(period).apply(
-            lambda x: np.dot(x, weights) / weights.sum(), raw=True
-        )
+    # ── HMA (Hull MA) — window 20 ─────────────────────────────────────────────
+    wma_half = _sma(close, 10)          # WMA(n/2) approximated with SMA for simplicity
+    wma_full = _sma(close, 20)
+    raw_hma  = 2 * wma_half - wma_full
+    data['HMA_20'] = _sma(raw_hma, int(np.sqrt(20)))
 
-    # HMA_20
-    half_wma = wma(close, 10)
-    full_wma = wma(close, 20)
-    hull_raw = 2 * half_wma - full_wma
-    data['HMA_20'] = wma(hull_raw, int(np.sqrt(20)))
-
-    # KAMA_20
+    # ── KAMA (Kaufman Adaptive MA) — window 20 ────────────────────────────────
     fast_sc = 2 / (2  + 1)
     slow_sc = 2 / (30 + 1)
-    kama = close.copy().astype(float)
-    for i in range(20, n):
-        direction  = abs(close.iloc[i] - close.iloc[i - 20])
-        volatility = close.diff().abs().iloc[i - 19:i + 1].sum()
-        er   = direction / (volatility + 1e-10)
+    kama    = [close.iloc[0]] * n
+    for i in range(1, n):
+        direction = abs(close.iloc[i] - close.iloc[max(0, i - 20)])
+        volatility = (close.diff().abs()).iloc[max(0, i - 20):i].sum()
+        er   = direction / volatility if volatility != 0 else 0
         sc   = (er * (fast_sc - slow_sc) + slow_sc) ** 2
-        kama.iloc[i] = kama.iloc[i - 1] + sc * (close.iloc[i] - kama.iloc[i - 1])
-    kama.iloc[:20] = np.nan
+        kama[i] = kama[i - 1] + sc * (close.iloc[i] - kama[i - 1])
     data['KAMA_20'] = kama
 
-    # Ichimoku
-    data['Ichimoku_Tenkan'] = (high.rolling(9).max()  + low.rolling(9).min())  / 2
-    data['Ichimoku_Kijun']  = (high.rolling(26).max() + low.rolling(26).min()) / 2
-
-    # Donchian
-    data['Donchian_High'] = high.rolling(20).max()
-    data['Donchian_Low']  = low.rolling(20).min()
-
-    # ATR_14
-    hl   = high - low
-    hcp  = (high - close.shift()).abs()
-    lcp  = (low  - close.shift()).abs()
-    tr   = pd.concat([hl, hcp, lcp], axis=1).max(axis=1)
-    data['ATR_14'] = tr.ewm(alpha=1/14, adjust=False).mean()
-
-    # ADX_14
-    up   = high.diff()
-    down = low.shift() - low
-    pdm  = pd.Series(np.where((up > down) & (up > 0),   up,   0), index=data.index)
-    mdm  = pd.Series(np.where((down > up) & (down > 0), down, 0), index=data.index)
-    atr_s = data['ATR_14'].replace(0, 1e-10)
-    pdi   = 100 * pdm.ewm(alpha=1/14, adjust=False).mean() / atr_s
-    mdi   = 100 * mdm.ewm(alpha=1/14, adjust=False).mean() / atr_s
-    dx    = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-10)
-    data['ADX_14'] = dx.ewm(alpha=1/14, adjust=False).mean()
-
-    # Parabolic SAR
-    af_start, af_step, af_max = 0.02, 0.02, 0.2
-    high_arr  = high.values
-    low_arr   = low.values
-    sar       = np.zeros(n)
-    trend_arr = np.ones(n)
-    ep        = np.zeros(n)
-    af_arr    = np.zeros(n)
-    sar[0]    = low_arr[0]
-    ep[0]     = high_arr[0]
-    af_arr[0] = af_start
-    for i in range(1, n):
-        ps, pe, pa, pt = sar[i-1], ep[i-1], af_arr[i-1], trend_arr[i-1]
-        if pt == 1:
-            sar[i] = ps + pa * (pe - ps)
-            sar[i] = min(sar[i], low_arr[i-1], low_arr[i-2] if i > 1 else low_arr[i-1])
-            if low_arr[i] < sar[i]:
-                trend_arr[i] = -1; sar[i] = pe; ep[i] = low_arr[i]; af_arr[i] = af_start
-            else:
-                trend_arr[i] = 1; ep[i] = max(pe, high_arr[i])
-                af_arr[i] = min(af_max, pa + af_step) if ep[i] > pe else pa
+    # ── FRAMA (Fractal Adaptive MA) ───────────────────────────────────────────
+    period = 16
+    frama  = [close.iloc[0]] * n
+    for i in range(period, n):
+        h1 = high.iloc[i - period    : i - period // 2].max()
+        l1 = low.iloc[i  - period    : i - period // 2].min()
+        h2 = high.iloc[i - period // 2 : i].max()
+        l2 = low.iloc[i  - period // 2 : i].min()
+        h3 = high.iloc[i - period    : i].max()
+        l3 = low.iloc[i  - period    : i].min()
+        n1 = (h1 - l1) / (period / 2) if (h1 - l1) > 0 else 0
+        n2 = (h2 - l2) / (period / 2) if (h2 - l2) > 0 else 0
+        n3 = (h3 - l3) / period       if (h3 - l3) > 0 else 0
+        if n1 > 0 and n2 > 0 and n3 > 0:
+            dim = (np.log(n1 + n2) - np.log(n3)) / np.log(2)
         else:
-            sar[i] = ps + pa * (pe - ps)
-            sar[i] = max(sar[i], high_arr[i-1], high_arr[i-2] if i > 1 else high_arr[i-1])
-            if high_arr[i] > sar[i]:
-                trend_arr[i] = 1; sar[i] = pe; ep[i] = high_arr[i]; af_arr[i] = af_start
-            else:
-                trend_arr[i] = -1; ep[i] = min(pe, low_arr[i])
-                af_arr[i] = min(af_max, pa + af_step) if ep[i] < pe else pa
-    data['Parabolic_SAR'] = np.round(sar, 2)
+            dim = 1.0
+        alpha = np.exp(-4.6 * (dim - 1))
+        alpha = max(0.01, min(1.0, alpha))
+        frama[i] = alpha * close.iloc[i] + (1 - alpha) * frama[i - 1]
+    data['FRAMA'] = frama
 
-    # Supertrend (period=7, multiplier=3)
-    atr7       = tr.ewm(span=7, adjust=False).mean()
-    hl2        = (high + low) / 2
-    upper_band = (hl2 + 3 * atr7).values
-    lower_band = (hl2 - 3 * atr7).values
-    close_arr  = close.values
-    supertrend = np.zeros(n)
-    signal     = [''] * n
-    supertrend[0] = upper_band[0]
-    signal[0]     = 'SELL'
-    for i in range(1, n):
-        if close_arr[i] > supertrend[i - 1]:
-            supertrend[i] = lower_band[i]; signal[i] = 'BUY'
-        else:
-            supertrend[i] = upper_band[i]; signal[i] = 'SELL'
-    data['Supertrend']        = np.round(supertrend, 2)
-    data['Supertrend_Signal'] = signal
-
-    # RSI_14
+    # ── RSI ───────────────────────────────────────────────────────────────────
     delta    = close.diff()
     gain     = delta.clip(lower=0)
     loss     = -delta.clip(upper=0)
     avg_gain = gain.ewm(alpha=1/14, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1/14, adjust=False).mean()
-    data['RSI_14'] = 100 - (100 / (1 + avg_gain / (avg_loss + 1e-10)))
+    rs       = avg_gain / (avg_loss + 1e-10)
+    data['RSI_14'] = 100 - (100 / (1 + rs))
 
-    # MACD
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
+    # ── MACD ──────────────────────────────────────────────────────────────────
+    ema12             = _ema(close, 12)
+    ema26             = _ema(close, 26)
     data['MACD_line']   = ema12 - ema26
-    data['MACD_signal'] = data['MACD_line'].ewm(span=9, adjust=False).mean()
+    data['MACD_signal'] = _ema(data['MACD_line'], 9)
     data['MACD_hist']   = data['MACD_line'] - data['MACD_signal']
 
-    # Stochastic
+    # ── Stochastic K / D ──────────────────────────────────────────────────────
     low14  = low.rolling(14).min()
     high14 = high.rolling(14).max()
     data['Stoch_K'] = 100 * (close - low14) / (high14 - low14 + 1e-10)
     data['Stoch_D'] = data['Stoch_K'].rolling(3).mean()
 
-    # Stoch RSI
+    # ── Stochastic RSI ────────────────────────────────────────────────────────
     rsi        = data['RSI_14']
-    rsi_low14  = rsi.rolling(14).min()
-    rsi_high14 = rsi.rolling(14).max()
-    data['Stoch_RSI'] = (rsi - rsi_low14) / (rsi_high14 - rsi_low14 + 1e-10)
+    rsi_min    = rsi.rolling(14).min()
+    rsi_max    = rsi.rolling(14).max()
+    data['Stoch_RSI'] = (rsi - rsi_min) / (rsi_max - rsi_min + 1e-10)
 
-    # CCI_20
-    tp2     = (high + low + close) / 3
-    tp_mean = tp2.rolling(20).mean()
-    tp_std  = tp2.rolling(20).std()
-    data['CCI_20'] = (tp2 - tp_mean) / (0.015 * tp_std + 1e-10)
+    # ── CCI ───────────────────────────────────────────────────────────────────
+    tp      = (high + low + close) / 3
+    tp_mean = tp.rolling(20).mean()
+    tp_std  = tp.rolling(20).std()
+    data['CCI_20'] = (tp - tp_mean) / (0.015 * tp_std + 1e-10)
 
-    # Williams %R
-    low14w  = low.rolling(14).min()
-    high14w = high.rolling(14).max()
-    data['Williams_R'] = -100 * (high14w - close) / (high14w - low14w + 1e-10)
-
-    # ROC_12
-    data['ROC_12'] = close.pct_change(12) * 100
-
-    # Ultimate Oscillator
-    prev_close = close.shift(1)
-    bp  = close - pd.concat([low, prev_close], axis=1).min(axis=1)
-    tr2 = pd.concat([high, prev_close], axis=1).max(axis=1) - \
-          pd.concat([low,  prev_close], axis=1).min(axis=1)
-    avg7  = bp.rolling(7).sum()  / (tr2.rolling(7).sum()  + 1e-10)
-    avg14 = bp.rolling(14).sum() / (tr2.rolling(14).sum() + 1e-10)
-    avg28 = bp.rolling(28).sum() / (tr2.rolling(28).sum() + 1e-10)
-    data['Ultimate_Oscillator'] = 100 * (4 * avg7 + 2 * avg14 + avg28) / 7
-
-    # CMO
-    up_sum   = gain.rolling(14).sum()
-    down_sum = loss.rolling(14).sum()
-    data['CMO'] = 100 * (up_sum - down_sum) / (up_sum + down_sum + 1e-10)
-
-    # TRIX
-    ema1 = close.ewm(span=15, adjust=False).mean()
-    ema2 = ema1.ewm(span=15, adjust=False).mean()
-    ema3 = ema2.ewm(span=15, adjust=False).mean()
-    data['TRIX'] = ema3.pct_change() * 100
-
-    # Bollinger Bands
-    bb_mid = close.rolling(20).mean()
-    bb_std = close.rolling(20).std()
-    data['BB_Upper']  = bb_mid + 2 * bb_std
-    data['BB_Middle'] = bb_mid
-    data['BB_Lower']  = bb_mid - 2 * bb_std
-
-    # Keltner Channel
-    kc_mid = close.ewm(span=20, adjust=False).mean()
-    data['Keltner_Upper'] = kc_mid + 1.5 * data['ATR_14']
-    data['Keltner_Lower'] = kc_mid - 1.5 * data['ATR_14']
-
-    # OBV
-    obv = np.zeros(n)
-    for i in range(1, n):
-        if close_arr[i] > close.values[i - 1]:
-            obv[i] = obv[i - 1] + vol.values[i]
-        elif close_arr[i] < close.values[i - 1]:
-            obv[i] = obv[i - 1] - vol.values[i]
-        else:
-            obv[i] = obv[i - 1]
-    data['OBV'] = obv
-
-    # VWAP (rolling 14-day)
-    tp_vwap = (high + low + close) / 3
-    data['VWAP'] = (tp_vwap * vol).rolling(14).sum() / (vol.rolling(14).sum() + 1e-10)
-
-    # MFI_14
-    tp3  = (high + low + close) / 3
-    rmf  = tp3 * vol
-    pmf  = rmf.where(tp3 > tp3.shift(), 0.0)
-    nmf  = rmf.where(tp3 < tp3.shift(), 0.0)
-    mfr  = pmf.rolling(14).sum() / (nmf.rolling(14).sum() + 1e-10)
+    # ── MFI ───────────────────────────────────────────────────────────────────
+    typical = (high + low + close) / 3
+    rmf     = typical * vol
+    pmf     = rmf.where(typical > typical.shift(), 0.0)
+    nmf     = rmf.where(typical < typical.shift(), 0.0)
+    mfr     = pmf.rolling(14).sum() / (nmf.rolling(14).sum() + 1e-10)
     data['MFI_14'] = 100 - (100 / (1 + mfr))
 
-    # Pivot Point
-    data['Pivot_Point'] = (high.shift(1) + low.shift(1) + close.shift(1)) / 3
+    # ── Williams %R ───────────────────────────────────────────────────────────
+    data['Williams_R'] = -100 * (high.rolling(14).max() - close) / (
+        high.rolling(14).max() - low.rolling(14).min() + 1e-10
+    )
 
-    # 52W High/Low
+    # ── ROC 12 ───────────────────────────────────────────────────────────────
+    data['ROC_12'] = close.pct_change(12) * 100
+
+    # ── ATR ───────────────────────────────────────────────────────────────────
+    atr14 = _atr(high, low, close, 14)
+    data['ATR_14'] = atr14
+
+    # ── Volatility % ──────────────────────────────────────────────────────────
+    data['Volatility'] = (close.pct_change().rolling(20).std() * np.sqrt(252) * 100)
+
+    # ── Bollinger Bands (20, 2) ───────────────────────────────────────────────
+    bb_mid             = _sma(close, 20)
+    bb_std             = close.rolling(20).std()
+    data['BB_Upper']   = bb_mid + 2 * bb_std
+    data['BB_Middle']  = bb_mid
+    data['BB_Lower']   = bb_mid - 2 * bb_std
+
+    # ── Keltner Channels (20, 2×ATR10) ───────────────────────────────────────
+    kc_mid                = _ema(close, 20)
+    kc_atr                = _atr(high, low, close, 10)
+    data['Keltner_Upper'] = kc_mid + 2 * kc_atr
+    data['Keltner_Lower'] = kc_mid - 2 * kc_atr
+
+    # ── Spread ────────────────────────────────────────────────────────────────
+    data['Spread'] = high - low
+
+    # ── Supertrend (fixed stateful implementation) ────────────────────────────
+    atr7    = _atr(high, low, close, 7)
+    hl2     = (high + low) / 2
+    upper_b = (hl2 + 3 * atr7).values
+    lower_b = (hl2 - 3 * atr7).values
+    close_v = close.values
+
+    final_upper = upper_b.copy()
+    final_lower = lower_b.copy()
+    st_signal   = [True] * n    # True = BUY
+
+    for i in range(1, n):
+        # Tighten bands: they can only move in one direction
+        final_upper[i] = (
+            min(upper_b[i], final_upper[i - 1])
+            if close_v[i - 1] <= final_upper[i - 1]
+            else upper_b[i]
+        )
+        final_lower[i] = (
+            max(lower_b[i], final_lower[i - 1])
+            if close_v[i - 1] >= final_lower[i - 1]
+            else lower_b[i]
+        )
+        # Determine direction
+        if close_v[i] > final_upper[i - 1]:
+            st_signal[i] = True
+        elif close_v[i] < final_lower[i - 1]:
+            st_signal[i] = False
+        else:
+            st_signal[i] = st_signal[i - 1]
+
+    data['Supertrend']        = [final_lower[i] if st_signal[i] else final_upper[i] for i in range(n)]
+    data['Supertrend_Signal'] = ['BUY' if s else 'SELL' for s in st_signal]
+
+    # ── Parabolic SAR ─────────────────────────────────────────────────────────
+    af_start, af_step, af_max = 0.02, 0.02, 0.2
+    psar   = close.iloc[0]
+    ep     = high.iloc[0]
+    af     = af_start
+    uptrend = True
+    psar_vals = [psar]
+
+    for i in range(1, n):
+        if uptrend:
+            psar = psar + af * (ep - psar)
+            psar = min(psar, low.iloc[i - 1], low.iloc[max(0, i - 2)])
+            if low.iloc[i] < psar:
+                uptrend = False
+                psar    = ep
+                ep      = low.iloc[i]
+                af      = af_start
+            else:
+                if high.iloc[i] > ep:
+                    ep = high.iloc[i]
+                    af = min(af + af_step, af_max)
+        else:
+            psar = psar + af * (ep - psar)
+            psar = max(psar, high.iloc[i - 1], high.iloc[max(0, i - 2)])
+            if high.iloc[i] > psar:
+                uptrend = True
+                psar    = ep
+                ep      = high.iloc[i]
+                af      = af_start
+            else:
+                if low.iloc[i] < ep:
+                    ep = low.iloc[i]
+                    af = min(af + af_step, af_max)
+        psar_vals.append(psar)
+
+    data['Parabolic_SAR'] = psar_vals
+
+    # ── Ichimoku (Tenkan / Kijun) ─────────────────────────────────────────────
+    data['Ichimoku_Tenkan'] = (high.rolling(9).max()  + low.rolling(9).min())  / 2
+    data['Ichimoku_Kijun']  = (high.rolling(26).max() + low.rolling(26).min()) / 2
+
+    # ── Donchian Channel (20) ─────────────────────────────────────────────────
+    data['Donchian_High'] = high.rolling(20).max()
+    data['Donchian_Low']  = low.rolling(20).min()
+
+    # ── ADX 14 ───────────────────────────────────────────────────────────────
+    up_move   = high.diff()
+    down_move = -low.diff()
+    plus_dm   = up_move.where((up_move > down_move) & (up_move > 0), 0.0)
+    minus_dm  = down_move.where((down_move > up_move) & (down_move > 0), 0.0)
+    atr_adx   = _atr(high, low, close, 14)
+    plus_di   = 100 * _ema(plus_dm,  14) / (atr_adx + 1e-10)
+    minus_di  = 100 * _ema(minus_dm, 14) / (atr_adx + 1e-10)
+    dx        = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di + 1e-10)
+    data['ADX_14'] = dx.ewm(span=14, adjust=False).mean()
+
+    # ── OBV ───────────────────────────────────────────────────────────────────
+    direction     = np.sign(close.diff().fillna(0))
+    data['OBV']   = (direction * vol).cumsum()
+
+    # ── VWAP (rolling 20-bar) ─────────────────────────────────────────────────
+    tp2          = (high + low + close) / 3
+    data['VWAP'] = (tp2 * vol).rolling(20).sum() / (vol.rolling(20).sum() + 1e-10)
+
+    # ── Gap ───────────────────────────────────────────────────────────────────
+    data['Gap'] = ((data['Open'] - close.shift()) / (close.shift() + 1e-10)) * 100
+
+    # ── Pivot Point ───────────────────────────────────────────────────────────
+    data['Pivot_Point'] = (high.shift() + low.shift() + close.shift()) / 3
+
+    # ── 52-Week High / Low ────────────────────────────────────────────────────
     data['52W_High'] = high.rolling(252).max()
     data['52W_Low']  = low.rolling(252).min()
 
-    # Fisher Transform
+    # ── Returns ───────────────────────────────────────────────────────────────
+    data['Prev_Close']  = close.shift(1)
+    data['Returns']     = close.pct_change() * 100
+    data['Log_Returns'] = np.log(close / (close.shift() + 1e-10))
+
+    # ── Ultimate Oscillator ───────────────────────────────────────────────────
+    bp    = close - pd.concat([low, close.shift()], axis=1).min(axis=1)
+    tr_uo = pd.concat([high, close.shift()], axis=1).max(axis=1) - \
+            pd.concat([low,  close.shift()], axis=1).min(axis=1)
+    avg7  = bp.rolling(7).sum()  / (tr_uo.rolling(7).sum()  + 1e-10)
+    avg14 = bp.rolling(14).sum() / (tr_uo.rolling(14).sum() + 1e-10)
+    avg28 = bp.rolling(28).sum() / (tr_uo.rolling(28).sum() + 1e-10)
+    data['Ultimate_Oscillator'] = 100 * (4 * avg7 + 2 * avg14 + avg28) / 7
+
+    # ── CMO (Chande Momentum Oscillator) ─────────────────────────────────────
+    diff       = close.diff()
+    cmo_up     = diff.clip(lower=0).rolling(14).sum()
+    cmo_down   = (-diff).clip(lower=0).rolling(14).sum()
+    data['CMO'] = 100 * (cmo_up - cmo_down) / (cmo_up + cmo_down + 1e-10)
+
+    # ── TRIX ─────────────────────────────────────────────────────────────────
+    t1          = _ema(close, 15)
+    t2          = _ema(t1, 15)
+    t3          = _ema(t2, 15)
+    data['TRIX'] = t3.pct_change() * 100
+
+    # ── Schaff Trend Cycle ────────────────────────────────────────────────────
+    macd_stc      = _ema(close, 23) - _ema(close, 50)
+    stc_k         = 100 * (macd_stc - macd_stc.rolling(10).min()) / \
+                    (macd_stc.rolling(10).max() - macd_stc.rolling(10).min() + 1e-10)
+    stc_d         = _ema(stc_k, 3)
+    data['Schaff_Trend_Cycle'] = stc_d.clip(0, 100)
+
+    # ── Fisher Transform ──────────────────────────────────────────────────────
     median_price = (high + low) / 2
-    highest_high = median_price.rolling(10).max()
-    lowest_low   = median_price.rolling(10).min()
-    value = 2 * ((median_price - lowest_low) / (highest_high - lowest_low + 1e-10)) - 1
-    value = value.clip(-0.999, 0.999)
+    highest      = median_price.rolling(9).max()
+    lowest       = median_price.rolling(9).min()
+    value        = 2 * ((median_price - lowest) / (highest - lowest + 1e-10)) - 1
+    value        = value.clip(-0.999, 0.999)
     data['Fisher_Transform'] = 0.5 * np.log((1 + value) / (1 - value))
 
-    # Schaff Trend Cycle
-    stc_macd  = data['MACD_line']
-    stc_low1  = stc_macd.rolling(10).min()
-    stc_high1 = stc_macd.rolling(10).max()
-    stc_k1    = 100 * (stc_macd - stc_low1) / (stc_high1 - stc_low1 + 1e-10)
-    stc_d1    = stc_k1.ewm(span=3, adjust=False).mean()
-    stc_low2  = stc_d1.rolling(10).min()
-    stc_high2 = stc_d1.rolling(10).max()
-    stc_k2    = 100 * (stc_d1 - stc_low2) / (stc_high2 - stc_low2 + 1e-10)
-    data['Schaff_Trend_Cycle'] = stc_k2.ewm(span=3, adjust=False).mean()
-
-    # FRAMA
-    frama = close.copy().astype(float)
-    w     = 16
-    for i in range(w, n):
-        seg  = close.iloc[i - w:i]
-        half = w // 2
-        h1 = seg.iloc[:half].max(); l1 = seg.iloc[:half].min()
-        h2 = seg.iloc[half:].max(); l2 = seg.iloc[half:].min()
-        h3 = seg.max();             l3 = seg.min()
-        n1 = (h1 - l1) / half
-        n2 = (h2 - l2) / half
-        n3 = (h3 - l3) / w
-        if n1 + n2 > 0 and n3 > 0:
-            dim = (np.log(n1 + n2) - np.log(n3)) / np.log(2)
-        else:
-            dim = 1.5
-        alpha = np.clip(np.exp(-4.6 * (dim - 1)), 0.01, 1.0)
-        frama.iloc[i] = alpha * close.iloc[i] + (1 - alpha) * frama.iloc[i - 1]
-    frama.iloc[:w] = np.nan
-    data['FRAMA'] = frama
-
-    # Coppock Curve
+    # ── Coppock Curve ─────────────────────────────────────────────────────────
     roc11 = close.pct_change(11) * 100
     roc14 = close.pct_change(14) * 100
-    data['Coppock_Curve'] = wma(roc11 + roc14, 10)
+    data['Coppock_Curve'] = _ema(roc11 + roc14, 10)
 
-    # Mass Index
-    ema9_hl  = (high - low).ewm(span=9, adjust=False).mean()
-    ema9_ema = ema9_hl.ewm(span=9, adjust=False).mean()
-    data['Mass_Index'] = (ema9_hl / (ema9_ema + 1e-10)).rolling(25).sum()
+    # ── Vortex Indicator ─────────────────────────────────────────────────────
+    vm_plus  = (high - low.shift()).abs()
+    vm_minus = (low  - high.shift()).abs()
+    tr_v     = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low  - close.shift()).abs()
+    ], axis=1).max(axis=1)
+    data['Vortex_Pos'] = vm_plus.rolling(14).sum()  / (tr_v.rolling(14).sum() + 1e-10)
+    data['Vortex_Neg'] = vm_minus.rolling(14).sum() / (tr_v.rolling(14).sum() + 1e-10)
 
-    # Vortex
-    vm_pos = (high - low.shift(1)).abs()
-    vm_neg = (low  - high.shift(1)).abs()
-    data['Vortex_Pos'] = vm_pos.rolling(14).sum() / (tr.rolling(14).sum() + 1e-10)
-    data['Vortex_Neg'] = vm_neg.rolling(14).sum() / (tr.rolling(14).sum() + 1e-10)
+    # ── Elder Ray ─────────────────────────────────────────────────────────────
+    ema13_elder             = _ema(close, 13)
+    data['Elder_Bull_Power'] = high - ema13_elder
+    data['Elder_Bear_Power'] = low  - ema13_elder
 
-    # Elder
-    data['Elder_Bull_Power'] = high - data['EMA_13']
-    data['Elder_Bear_Power'] = low  - data['EMA_13']
+    # ── RVI (Relative Vigor Index) ────────────────────────────────────────────
+    num = (close - data['Open']) + 2 * (close.shift(1) - data['Open'].shift(1)) + \
+          2 * (close.shift(2) - data['Open'].shift(2)) + (close.shift(3) - data['Open'].shift(3))
+    den = (high - low) + 2 * (high.shift(1) - low.shift(1)) + \
+          2 * (high.shift(2) - low.shift(2)) + (high.shift(3) - low.shift(3))
+    data['RVI'] = num.rolling(10).mean() / (den.rolling(10).mean() + 1e-10)
 
-    # RVI
-    co   = close - open_
-    hl_r = high - low
-    rvi_num = (co + 2 * co.shift(1) + 2 * co.shift(2) + co.shift(3)) / 6
-    rvi_den = (hl_r + 2 * hl_r.shift(1) + 2 * hl_r.shift(2) + hl_r.shift(3)) / 6
-    data['RVI'] = rvi_num.rolling(10).sum() / (rvi_den.rolling(10).sum() + 1e-10)
-
-    # Derived
-    data['Prev_Close']  = close.shift(1)
-    data['Gap']         = open_ - close.shift(1)
-    data['Returns']     = close.pct_change() * 100
-    data['Log_Returns'] = np.log(close / (close.shift(1) + 1e-10))
-    data['Spread']      = high - low
-    data['Volatility']  = data['Returns'].rolling(20).std()
+    # ── Mass Index ────────────────────────────────────────────────────────────
+    ema_hl   = _ema(high - low, 9)
+    ema2_hl  = _ema(ema_hl, 9)
+    data['Mass_Index'] = (ema_hl / (ema2_hl + 1e-10)).rolling(25).sum()
 
     return data
 
 # ── RUN ───────────────────────────────────────────────────────────────────────
 
 def run(log=print):
-    if os.path.exists("master_data.csv"):
-        os.remove("master_data.csv")
-        log("Removed legacy master_data.csv")
+    log("Downloading NIFTY100")
+    download_universe(NIFTY100_URL, "NIFTY100")
 
-    # Validate existing master CSVs — delete if any stock has < 200 rows
-    # (means a previous broken run saved incomplete data to cache)
-    for u_name in ["NIFTY100", "NIFTY_LARGEMIDCAP250"]:
-        path = f"master_data_{u_name}.csv"
-        if os.path.exists(path):
-            try:
-                check_df  = pd.read_csv(path, usecols=['Stock'])
-                min_rows  = check_df['Stock'].value_counts().min()
-                mean_rows = int(check_df['Stock'].value_counts().mean())
-                log(f"Validating {path}: min={min_rows} rows/stock, mean={mean_rows}")
-                if min_rows < 200:
-                    log(f"  INVALID — min rows {min_rows} < 200. Deleting for full re-download.")
-                    os.remove(path)
-                else:
-                    log(f"  OK")
-            except Exception as e:
-                log(f"  Could not validate {path}: {e} — deleting to be safe.")
-                os.remove(path)
+    log("Downloading LARGEMIDCAP250")
+    download_universe(LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250")
 
-    universes = [
-        (NIFTY100_URL,    "NIFTY100"),
-        (LARGEMIDCAP_URL, "NIFTY_LARGEMIDCAP250"),
-    ]
-
-    for url, u_name in universes:
-        log(f"\n{'='*50}")
-        log(f"Downloading {u_name}...")
-        log(f"{'='*50}")
-        download_universe(url, u_name, log=log)
-
-    log(f"\n{'='*50}")
-    log("Loading master CSVs...")
-    log(f"{'='*50}")
-
-    all_frames = []
-    for _, u_name in universes:
-        path = f"master_data_{u_name}.csv"
-        if os.path.exists(path):
-            u_df = pd.read_csv(path)
-            u_df['Date'] = pd.to_datetime(u_df['Date'])
-            log(f"  Loaded {path}: {len(u_df):,} rows")
-            all_frames.append(u_df)
-        else:
-            log(f"  WARNING: {path} not found — universe will be missing")
-
-    if not all_frames:
-        log("FATAL: No master CSVs loaded. Aborting.")
-        return pd.DataFrame()
-
-    df = pd.concat(all_frames, ignore_index=True)
-
-    for col in ['Stock', 'Universe']:
-        if col not in df.columns:
-            log(f"FATAL: column '{col}' missing. Aborting.")
-            return pd.DataFrame()
-
+    df = pd.read_csv(MASTER_PATH)
     df = df.dropna(subset=['Stock', 'Universe'])
-    log(f"Master total: {len(df):,} rows | {df['Stock'].nunique()} stocks | latest: {df['Date'].max().date()}")
+    df['Date'] = pd.to_datetime(df['Date'])
+    log(f"Master rows: {len(df):,}")
 
-    log(f"\n{'='*50}")
-    log("Calculating indicators...")
-    log(f"{'='*50}")
+    output_data = {}
+    for u in df['Universe'].unique():
+        log(f"Calculating indicators: {u}")
+        u_df = df[df['Universe'] == u].copy()
+        output_data[u] = (
+            u_df.groupby(['Stock', 'Universe'], group_keys=False)
+                .apply(calculate_indicators, include_groups=True)
+        )
 
-    all_results = []
-    for _, u_name in universes:
-        log(f"  [{u_name}] processing...")
-        u_df = df[df['Universe'] == u_name].copy()
-        ok, skip = 0, 0
-        for stock, grp in u_df.groupby('Stock', group_keys=False):
-            try:
-                all_results.append(calculate_indicators(grp.copy()))
-                ok += 1
-            except Exception as e:
-                log(f"    Skipping {stock}: {e}")
-                skip += 1
-        log(f"  [{u_name}] done: {ok} OK | {skip} skipped")
-
-    if not all_results:
-        log("FATAL: No indicator results. Aborting.")
-        return pd.DataFrame()
-
-    combined = pd.concat(all_results, ignore_index=True)
+    combined = pd.concat(output_data.values(), ignore_index=True)
 
     available_cols = [c for c in COLS if c in combined.columns]
     latest = (
         combined[available_cols]
         .sort_values('Date')
-        .drop_duplicates(subset=['Stock', 'Universe'], keep='last')
+        .groupby(['Stock', 'Universe'], group_keys=False)
+        .apply(lambda x: x.iloc[-1])
         .reset_index(drop=True)
     )
     latest['Date'] = pd.to_datetime(latest['Date']).dt.strftime('%Y-%m-%d')
 
-    log(f"\nSnapshot: {len(latest)} rows | {len(available_cols)} columns")
-    log(str(latest.groupby('Universe')['Stock'].nunique()))
+    log(f"Snapshot: {len(latest)} rows, {len(available_cols)} columns")
 
-    log(f"\n{'='*50}")
-    log("Pushing to Google Sheet...")
-    log(f"{'='*50}")
+    # ── Push to Google Sheets ──────────────────────────────────────────────────
     gc        = get_gspread_client()
     sh        = gc.open_by_key(SHEET_ID)
     worksheet = sh.get_worksheet(0)
     worksheet.clear()
     gd.set_with_dataframe(worksheet, latest)
-    log(f"Done. {len(latest)} rows → '{sh.title}'")
-    log(f"URL: https://docs.google.com/spreadsheets/d/{SHEET_ID}")
 
+    log(f"Done. {len(latest)} rows pushed to Google Sheets.")
     return latest
 
 
