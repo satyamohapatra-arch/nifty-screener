@@ -193,10 +193,21 @@ def _atr(high, low, close, period=14):
 
 def calculate_indicators(data: pd.DataFrame) -> pd.DataFrame:
     data  = data.sort_values('Date').reset_index(drop=True).copy()
-    close = data['Close']
-    high  = data['High']
-    low   = data['Low']
-    vol   = data['Volume']
+
+    # Force numeric dtypes — object dtype causes all rolling/ewm to silently return NaN
+    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        data[col] = pd.to_numeric(data[col], errors='coerce')
+
+    # Drop rows where Close is NaN (corrupt / missing bars)
+    data = data.dropna(subset=['Close', 'High', 'Low', 'Open']).reset_index(drop=True)
+
+    if len(data) < 2:
+        return data
+
+    close = data['Close'].astype(float)
+    high  = data['High'].astype(float)
+    low   = data['Low'].astype(float)
+    vol   = data['Volume'].astype(float)
     n     = len(data)
 
     # ── Simple / Exponential MAs ──────────────────────────────────────────────
@@ -515,6 +526,8 @@ def run(log=print):
     df = pd.read_csv(MASTER_PATH)
     df = df.dropna(subset=['Stock', 'Universe'])
     df['Date'] = pd.to_datetime(df['Date'])
+    for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
     log(f"Master rows: {len(df):,}")
 
     all_latest = []
