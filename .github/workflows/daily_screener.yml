@@ -2,47 +2,85 @@ name: Daily Nifty Screener
 
 on:
   schedule:
-    # 10:05 UTC = 15:35 IST every weekday
-    - cron: '5 10 * * 1-5'
+    # Runs at 16:15 IST (10:45 UTC) every weekday — after NSE market close at 15:30 IST
+    - cron: '45 10 * * 1-5'
   workflow_dispatch:
+
+env:
+  # Use Node.js 24 now to avoid the forced migration on Sep 16 2026
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-screener:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
 
     steps:
-      - name: Checkout repo
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      # ── 2. Set up Python ───────────────────────────────────────────────────
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: pip
 
+      # ── 3. Cache pip dependencies ──────────────────────────────────────────
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      # ── 4. Restore master_data.csv from previous run ───────────────────────
+      #       This is the key fix: without this, every run re-downloads from
+      #       2021-01-01, wasting ~4 minutes and risking yfinance rate limits.
       - name: Restore master data cache
         uses: actions/cache@v4
         with:
-          path: |
-            master_data_NIFTY100.csv
-            master_data_NIFTY_LARGEMIDCAP250.csv
-          key: master-data-${{ runner.os }}-${{ hashFiles('screener.py') }}
+          path: master_data.csv
+          # Key rotates weekly so stale data never accumulates indefinitely
+          key: master-data-${{ runner.os }}-${{ env.WEEK }}
           restore-keys: |
             master-data-${{ runner.os }}-
+        env:
+          WEEK: ${{ github.run_number }}
 
+      # ── 5. Install dependencies ────────────────────────────────────────────
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # ── 6. Run screener ────────────────────────────────────────────────────
       - name: Run screener
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python screener.py 2>&1 | tee screener_log.txt
+        run: |
+          python - <<'EOF'
+          import screener, sys
+          def log(msg):
+              print(msg, flush=True)
+          try:
+              screener.run(log=log)
+          except Exception as e:
+              import traceback
+              traceback.print_exc()
+              sys.exit(1)
+          EOF
 
-      - name: Upload log artifact
+      # ── 7. Save run log as artifact ────────────────────────────────────────
+      - name: Save log artifact
+        if: always()
+        run: |
+          echo "Run: ${{ github.run_number }}" > screener_run.log
+          echo "Time (UTC): $(date -u)"        >> screener_run.log
+          echo "Status: ${{ job.status }}"     >> screener_run.log
+
+      - name: Upload log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screener-log-${{ github.run_number }}
-          path: screener_log.txt
-          retention-days: 7
+          path: screener_run.log
+          retention-days: 14
