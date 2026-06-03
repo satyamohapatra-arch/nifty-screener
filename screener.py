@@ -517,25 +517,22 @@ def run(log=print):
     df['Date'] = pd.to_datetime(df['Date'])
     log(f"Master rows: {len(df):,}")
 
-    output_data = {}
+    all_latest = []
     for u in df['Universe'].unique():
         log(f"Calculating indicators: {u}")
         u_df = df[df['Universe'] == u].copy()
-        output_data[u] = (
-            u_df.groupby(['Stock', 'Universe'], group_keys=False)
-                .apply(calculate_indicators)
-        )
+        for stock, stock_df in u_df.groupby('Stock'):
+            try:
+                result = calculate_indicators(stock_df.copy())
+                if not result.empty:
+                    all_latest.append(result.iloc[-1])
+            except Exception as e:
+                log(f"  Warning: skipped {stock} — {e}")
 
-    combined = pd.concat(output_data.values(), ignore_index=True)
+    combined = pd.DataFrame(all_latest).reset_index(drop=True)
 
     available_cols = [c for c in COLS if c in combined.columns]
-    latest = (
-        combined[available_cols]
-        .sort_values('Date')
-        .groupby(['Stock', 'Universe'], group_keys=False)
-        .apply(lambda x: x.iloc[-1])
-        .reset_index(drop=True)
-    )
+    latest = combined[available_cols].reset_index(drop=True)
     latest['Date'] = pd.to_datetime(latest['Date']).dt.strftime('%Y-%m-%d')
 
     log(f"Snapshot: {len(latest)} rows, {len(available_cols)} columns")
