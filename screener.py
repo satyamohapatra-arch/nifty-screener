@@ -109,45 +109,40 @@ def download_universe(symbols_url, universe_name):
         for s in pd.read_csv(symbols_url)["Symbol"].tolist()
     ]
 
-    END_DATE   = last_trading_day()
-    # Use today+1 (in IST) as fetch end — NOT END_DATE+1.
-    # yfinance for .NS stocks needs end to be strictly after the last desired date
-    # on the exchange calendar. Using END_DATE+1 sometimes still misses the last bar
-    # because yfinance pages by calendar day, not trading day.
-    ist = zoneinfo.ZoneInfo("Asia/Kolkata")
-    FETCH_END = (datetime.now(ist) + timedelta(days=1)).strftime('%Y-%m-%d')
+    ist       = zoneinfo.ZoneInfo("Asia/Kolkata")
+    END_DATE  = last_trading_day()                                      # e.g. "2026-06-03"
+    FETCH_END = (datetime.now(ist) + timedelta(days=2)).strftime('%Y-%m-%d')  # always today+2
 
+    # Load existing cache
     if os.path.exists(MASTER_PATH):
-        existing   = pd.read_csv(MASTER_PATH)
+        existing = pd.read_csv(MASTER_PATH)
         existing['Date'] = pd.to_datetime(existing['Date']).dt.tz_localize(None).dt.normalize()
-        last_date  = existing[existing['Universe'] == universe_name]['Date'].max()
-        if pd.isna(last_date):
-            start_date = "2021-01-01"
-        else:
-            # Always re-fetch the last stored date — it may have been saved with a
-            # wrong date due to timezone issues, or may be a partial day's data.
-            start_date = last_date.strftime('%Y-%m-%d')
-            # Drop the last date's rows so we cleanly replace them
-            existing = existing[existing['Date'] < last_date]
     else:
-        start_date = "2021-01-01"
-        existing   = None
+        existing = pd.DataFrame()
 
-    if start_date > END_DATE:
-        print(f"  [{universe_name}] Already up-to-date (last={END_DATE}). Skipping download.")
-        return (
-            existing[existing['Universe'] == universe_name]
-            if existing is not None
-            else pd.DataFrame()
-        )
+    # Per-stock: figure out what to fetch, always overlap last 7 calendar days
+    # to handle timezone-shifted dates, partial days, and yfinance calendar quirks.
+    OVERLAP_START = (datetime.strptime(END_DATE, '%Y-%m-%d') - timedelta(days=7)).strftime('%Y-%m-%d')
 
-    print(f"  [{universe_name}] Fetching {start_date} → {END_DATE} for {len(stocks)} stocks…")
+    if existing.empty:
+        bulk_start = "2021-01-01"
+    else:
+        u_existing  = existing[existing['Universe'] == universe_name]
+        if u_existing.empty:
+            bulk_start = "2021-01-01"
+        else:
+            # Start from 7 days before the last date we have — catches any tz-shifted rows
+            oldest_last = u_existing.groupby('Stock')['Date'].max().min()  # earliest "last date" across stocks
+            bulk_start  = (oldest_last - timedelta(days=7)).strftime('%Y-%m-%d')
+
+    print(f"  [{universe_name}] Fetching {bulk_start} → {END_DATE} (fetch_end={FETCH_END}) for {len(stocks)} stocks…")
+
     all_data = []
     for stock in stocks:
         try:
             df = yf.download(
                 stock,
-                start=start_date,
+                start=bulk_start,
                 end=FETCH_END,
                 interval="1d",
                 auto_adjust=False,
@@ -158,9 +153,9 @@ def download_universe(symbols_url, universe_name):
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df = df.reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
-            # Strip timezone (NSE returns Asia/Kolkata tz-aware timestamps).
-            # Without this, CSV roundtrip converts to UTC, shifting dates back by ~5.5hrs
-            # and turning e.g. 2026-06-03 00:00+05:30 into 2026-06-02.
+            # Strip timezone — NSE returns Asia/Kolkata tz-aware timestamps.
+            # Without this, CSV roundtrip converts to UTC, shifting e.g.
+            # 2026-06-03 00:00+05:30 → 2026-06-02 18:30 UTC → date "2026-06-02".
             df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None).dt.normalize()
             df["Stock"]    = stock
             df["Universe"] = universe_name
@@ -170,13 +165,19 @@ def download_universe(symbols_url, universe_name):
 
     new_data = pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
 
-    if existing is not None and not new_data.empty:
-        combined = pd.concat([existing, new_data], ignore_index=True)
-        combined = combined.drop_duplicates(subset=['Date', 'Stock', 'Universe'])
+    if not existing.empty and not new_data.empty:
+        # Remove overlapping rows from existing before merging, so new data wins
+        overlap_mask = (
+            existing['Universe'].eq(universe_name) &
+            (existing['Date'] >= pd.Timestamp(bulk_start))
+        )
+        existing_trimmed = existing[~overlap_mask]
+        combined = pd.concat([existing_trimmed, new_data], ignore_index=True)
+        combined = combined.drop_duplicates(subset=['Date', 'Stock', 'Universe'], keep='last')
         combined.to_csv(MASTER_PATH, index=False)
         return combined[combined['Universe'] == universe_name]
 
-    if existing is not None and new_data.empty:
+    if not existing.empty and new_data.empty:
         return existing[existing['Universe'] == universe_name]
 
     if not new_data.empty:
