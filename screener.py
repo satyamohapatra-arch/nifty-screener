@@ -157,6 +157,8 @@ def download_universe(symbols_url, universe_name):
             # Without this, CSV roundtrip converts to UTC, shifting e.g.
             # 2026-06-03 00:00+05:30 → 2026-06-02 18:30 UTC → date "2026-06-02".
             df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None).dt.normalize()
+            # Drop any bars beyond the last confirmed closed trading day
+            df = df[df["Date"] <= pd.Timestamp(END_DATE)]
             df["Stock"]    = stock
             df["Universe"] = universe_name
             all_data.append(df)
