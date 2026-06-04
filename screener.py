@@ -110,9 +110,12 @@ def download_universe(symbols_url, universe_name):
     ]
 
     END_DATE   = last_trading_day()
-    FETCH_END  = (
-        datetime.strptime(END_DATE, '%Y-%m-%d') + timedelta(days=1)
-    ).strftime('%Y-%m-%d')
+    # Use today+1 (in IST) as fetch end — NOT END_DATE+1.
+    # yfinance for .NS stocks needs end to be strictly after the last desired date
+    # on the exchange calendar. Using END_DATE+1 sometimes still misses the last bar
+    # because yfinance pages by calendar day, not trading day.
+    ist = zoneinfo.ZoneInfo("Asia/Kolkata")
+    FETCH_END = (datetime.now(ist) + timedelta(days=1)).strftime('%Y-%m-%d')
 
     if os.path.exists(MASTER_PATH):
         existing   = pd.read_csv(MASTER_PATH)
@@ -121,7 +124,11 @@ def download_universe(symbols_url, universe_name):
         if pd.isna(last_date):
             start_date = "2021-01-01"
         else:
-            start_date = (last_date + timedelta(days=1)).strftime('%Y-%m-%d')
+            # Always re-fetch the last stored date — it may have been saved with a
+            # wrong date due to timezone issues, or may be a partial day's data.
+            start_date = last_date.strftime('%Y-%m-%d')
+            # Drop the last date's rows so we cleanly replace them
+            existing = existing[existing['Date'] < last_date]
     else:
         start_date = "2021-01-01"
         existing   = None
