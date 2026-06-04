@@ -116,7 +116,7 @@ def download_universe(symbols_url, universe_name):
 
     if os.path.exists(MASTER_PATH):
         existing   = pd.read_csv(MASTER_PATH)
-        existing['Date'] = pd.to_datetime(existing['Date'])
+        existing['Date'] = pd.to_datetime(existing['Date']).dt.tz_localize(None).dt.normalize()
         last_date  = existing[existing['Universe'] == universe_name]['Date'].max()
         if pd.isna(last_date):
             start_date = "2021-01-01"
@@ -151,6 +151,10 @@ def download_universe(symbols_url, universe_name):
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             df = df.reset_index()[["Date", "Open", "High", "Low", "Close", "Volume"]]
+            # Strip timezone (NSE returns Asia/Kolkata tz-aware timestamps).
+            # Without this, CSV roundtrip converts to UTC, shifting dates back by ~5.5hrs
+            # and turning e.g. 2026-06-03 00:00+05:30 into 2026-06-02.
+            df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None).dt.normalize()
             df["Stock"]    = stock
             df["Universe"] = universe_name
             all_data.append(df)
@@ -525,7 +529,7 @@ def run(log=print):
 
     df = pd.read_csv(MASTER_PATH)
     df = df.dropna(subset=['Stock', 'Universe'])
-    df['Date'] = pd.to_datetime(df['Date'])
+    df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None).dt.normalize()
     for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
         df[col] = pd.to_numeric(df[col], errors='coerce')
     log(f"Master rows: {len(df):,}")
@@ -548,7 +552,13 @@ def run(log=print):
     latest = combined[available_cols].reset_index(drop=True)
     latest['Date'] = pd.to_datetime(latest['Date']).dt.strftime('%Y-%m-%d')
 
+    # Stamp every row with the IST time this screener run produced the data
+    ist = zoneinfo.ZoneInfo("Asia/Kolkata")
+    run_time_ist = datetime.now(ist).strftime('%Y-%m-%d %H:%M IST')
+    latest['Last_Run_IST'] = run_time_ist
+
     log(f"Snapshot: {len(latest)} rows, {len(available_cols)} columns")
+    log(f"Data date: {latest['Date'].max()}  |  Run time: {run_time_ist}")
 
     # ── Push to Google Sheets ──────────────────────────────────────────────────
     gc        = get_gspread_client()
