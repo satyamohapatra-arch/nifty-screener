@@ -551,14 +551,27 @@ if data_ok and not df.empty:
 
     # KPIs
     last_date  = df['Date'].max() if 'Date' in df.columns else "—"
-    buy_count  = (filtered['Supertrend_Signal'].astype(str).str.upper() == "BUY").sum() \
-                 if 'Supertrend_Signal' in filtered.columns else 0
+    last_run   = df['Last_Run_IST'].iloc[0] if 'Last_Run_IST' in df.columns else "—"
 
-    k1, k2, k3, k4 = st.columns([1, 1, 1, 1], gap="medium")
+    # Warn if data date lags today by more than 1 trading day
+    try:
+        import zoneinfo as _zi
+        from datetime import datetime as _dt, timedelta as _td
+        _ist  = _zi.ZoneInfo("Asia/Kolkata")
+        _now  = _dt.now(_ist).date()
+        _data = pd.to_datetime(last_date).date()
+        _lag  = (_now - _data).days
+        if _lag > 3:
+            st.warning(f"⚠️ Data is {_lag} days old ({last_date}). yfinance may be delayed — try re-running the screener.")
+    except Exception:
+        pass
+
+    k1, k2, k3, k4, k5 = st.columns([1, 1, 1, 1, 1.6], gap="medium")
     k1.metric("Total Stocks",   len(view_df))
     k2.metric("Matching",       len(filtered))
     k3.metric("Active Filters", len(st.session_state.filters))
-    k4.metric("Last Update",    str(last_date))
+    k4.metric("Data Date",      str(last_date))
+    k5.metric("Screener Run",   str(last_run))
 
     st.divider()
 
